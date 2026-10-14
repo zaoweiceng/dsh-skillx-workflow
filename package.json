@@ -42,5 +42,10 @@
   },
   "engines": {
     "node": ">=22.19"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zaoweiceng/dsh-skillx-workflow.git"
   }
 }

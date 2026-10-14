@@ -1,0 +1,312 @@
+{
+  "allSixIndependentSuccess": true,
+  "allForegroundUsageComplete": true,
+  "allBackgroundTerminal": true,
+  "allBackgroundUsageComplete": true,
+  "requestConfigs": [
+    {
+      "maxTokens": 256000,
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek-official",
+      "reasoningEffort": "high"
+    }
+  ],
+  "sourceHashMismatches": [],
+  "promptMessages": [
+    {
+      "sessionId": "session-6f78a0f4-0bd2-4f8e-b635-63db7fff05e5",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    },
+    {
+      "sessionId": "session-bc8f66e5-32eb-48e2-a2be-662b37a89016",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    },
+    {
+      "sessionId": "session-cee3fadc-d7fb-4a3a-bfde-c3f1b82a2d10",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    },
+    {
+      "sessionId": "session-ba2cbe77-431c-4d00-8eb6-67866e301cfb",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    },
+    {
+      "sessionId": "session-a11e8b00-b5aa-4e95-923f-8f87e85e56a1",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    },
+    {
+      "sessionId": "session-0a045048-48f2-4626-9d27-56dd444f839b",
+      "userMessages": 1,
+      "sha256": "8922a53099840de11ade913b40ed8bf1c99160802ed6f989f659930c3551ed3d"
+    }
+  ],
+  "identicalPromptHashes": true,
+  "permissionEvents": [
+    {
+      "sessionId": "session-6f78a0f4-0bd2-4f8e-b635-63db7fff05e5",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "session-bc8f66e5-32eb-48e2-a2be-662b37a89016",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "session-cee3fadc-d7fb-4a3a-bfde-c3f1b82a2d10",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "session-ba2cbe77-431c-4d00-8eb6-67866e301cfb",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "session-a11e8b00-b5aa-4e95-923f-8f87e85e56a1",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    },
+    {
+      "sessionId": "session-0a045048-48f2-4626-9d27-56dd444f839b",
+      "events": [
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "workspace-write"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "ask"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "data": {
+            "policy": "never"
+          }
+        }
+      ]
+    }
+  ],
+  "pins": [
+    {
+      "runId": "80349b99-d7f3-4bcc-969b-81ae266938fc",
+      "name": "commit-and-simulate-mr-merge",
+      "version": 2,
+      "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+      "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+      "dependencies": []
+    },
+    {
+      "runId": "b6ad3a61-7656-43a7-b6a9-f4c5fd3bca4d",
+      "name": "commit-and-simulate-mr-merge",
+      "version": 2,
+      "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+      "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+      "dependencies": []
+    },
+    {
+      "runId": "bed40394-79f0-42e2-a7d3-54efd09249ff",
+      "name": "commit-and-simulate-mr-merge",
+      "version": 2,
+      "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+      "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+      "dependencies": []
+    }
+  ],
+  "nativeDispatchCounts": [
+    {
+      "runId": "80349b99-d7f3-4bcc-969b-81ae266938fc",
+      "count": 21,
+      "statuses": [
+        "succeeded"
+      ],
+      "reasoningCalls": 0
+    },
+    {
+      "runId": "b6ad3a61-7656-43a7-b6a9-f4c5fd3bca4d",
+      "count": 21,
+      "statuses": [
+        "succeeded"
+      ],
+      "reasoningCalls": 0
+    },
+    {
+      "runId": "bed40394-79f0-42e2-a7d3-54efd09249ff",
+      "count": 21,
+      "statuses": [
+        "succeeded"
+      ],
+      "reasoningCalls": 0
+    }
+  ],
+  "foregroundRecoverySessions": [],
+  "backgroundSessions": [],
+  "duplicateFullReads": 0,
+  "inlineReferences": 0,
+  "rejectedSubmits": 0,
+  "auxiliaryUnknownUsageCount": 6,
+  "scope": "Only six native-v2-comparison attempts; no previous extraction/preparation or old trials counted.",
+  "cleanup": {
+    "profileMatchesBefore": true,
+    "profileSha256": "562ad55881c2423073d2c26e4dd18006c26f50d9407151e35aaf95f37ac03e86",
+    "runtime": {
+      "mode": "native-agent",
+      "dataRoot": "/Users/USER/.dsh/profiles/web/native-workflows",
+      "enableCapabilities": true
+    },
+    "freshCatalogFinal": {
+      "commit-local-changes": {
+        "name": "commit-local-changes",
+        "description": "Stage and commit all pending changes in one local commit with a fixed message; no push or remotes.",
+        "kind": "skill",
+        "enabled": true,
+        "version": 1,
+        "revisionId": "37efa295-d5fc-498a-808c-b258140c1fd2"
+      },
+      "commit-and-simulate-mr-merge": {
+        "name": "commit-and-simulate-mr-merge",
+        "description": "Commit local changes, then create, merge and read back a simulated MR on a local loopback mock hosting service.",
+        "kind": "workflow",
+        "enabled": true,
+        "version": 2,
+        "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650"
+      }
+    },
+    "mockStopped": true,
+    "fixtureRestored": true
+  }
+}

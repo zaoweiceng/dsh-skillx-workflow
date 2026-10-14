@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/skillx/commit-local-changes/input.schema.json",
+  "title": "CommitLocalChangesInput",
+  "description": "创建本地 Git commit 所需输入。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["message"],
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Git commit message。建议使用约定式提交格式，例如 docs: update skillx guide。"
+    },
+    "includeStatus": {
+      "type": "boolean",
+      "description": "是否在输出中返回提交前的 git status --short 摘要。",
+      "default": false
+    }
+  }
+}

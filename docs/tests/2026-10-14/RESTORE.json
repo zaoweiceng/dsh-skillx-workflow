@@ -1,0 +1,29 @@
+{
+  "profileMatchesBefore": true,
+  "profileSha256": "562ad55881c2423073d2c26e4dd18006c26f50d9407151e35aaf95f37ac03e86",
+  "runtime": {
+    "mode": "native-agent",
+    "dataRoot": "/Users/USER/.dsh/profiles/web/native-workflows",
+    "enableCapabilities": true
+  },
+  "freshCatalogFinal": {
+    "commit-local-changes": {
+      "name": "commit-local-changes",
+      "description": "Stage and commit all pending changes in one local commit with a fixed message; no push or remotes.",
+      "kind": "skill",
+      "enabled": true,
+      "version": 1,
+      "revisionId": "37efa295-d5fc-498a-808c-b258140c1fd2"
+    },
+    "commit-and-simulate-mr-merge": {
+      "name": "commit-and-simulate-mr-merge",
+      "description": "Commit local changes, then create, merge and read back a simulated MR on a local loopback mock hosting service.",
+      "kind": "workflow",
+      "enabled": true,
+      "version": 2,
+      "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650"
+    }
+  },
+  "mockStopped": true,
+  "fixtureRestored": true
+}

@@ -1,0 +1,707 @@
+{
+  "trials": [
+    {
+      "condition": "baseline",
+      "trial": 1,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 75594,
+      "totalTokens": 235817,
+      "modelCalls": 10,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 235817,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [],
+      "sourceHashDrift": {},
+      "sessionId": "session-6f78a0f4-0bd2-4f8e-b635-63db7fff05e5",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    },
+    {
+      "condition": "baseline",
+      "trial": 2,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 66044,
+      "totalTokens": 230364,
+      "modelCalls": 10,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 230364,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [],
+      "sourceHashDrift": {},
+      "sessionId": "session-bc8f66e5-32eb-48e2-a2be-662b37a89016",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    },
+    {
+      "condition": "baseline",
+      "trial": 3,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 82111,
+      "totalTokens": 266660,
+      "modelCalls": 11,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 266660,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [],
+      "sourceHashDrift": {},
+      "sessionId": "session-cee3fadc-d7fb-4a3a-bfde-c3f1b82a2d10",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    },
+    {
+      "condition": "workflow",
+      "trial": 1,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 47716,
+      "totalTokens": 130996,
+      "modelCalls": 6,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 130996,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [
+        {
+          "runId": "80349b99-d7f3-4bcc-969b-81ae266938fc",
+          "name": "commit-and-simulate-mr-merge",
+          "version": 2,
+          "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+          "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+          "dependencies": []
+        }
+      ],
+      "sourceHashDrift": {},
+      "sessionId": "session-ba2cbe77-431c-4d00-8eb6-67866e301cfb",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    },
+    {
+      "condition": "workflow",
+      "trial": 2,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 52228,
+      "totalTokens": 134727,
+      "modelCalls": 6,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 134727,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [
+        {
+          "runId": "b6ad3a61-7656-43a7-b6a9-f4c5fd3bca4d",
+          "name": "commit-and-simulate-mr-merge",
+          "version": 2,
+          "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+          "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+          "dependencies": []
+        }
+      ],
+      "sourceHashDrift": {},
+      "sessionId": "session-a11e8b00-b5aa-4e95-923f-8f87e85e56a1",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    },
+    {
+      "condition": "workflow",
+      "trial": 3,
+      "status": "terminal",
+      "success": true,
+      "elapsedMs": 54199,
+      "totalTokens": 153209,
+      "modelCalls": 7,
+      "backgroundTokens": 0,
+      "independentVerification": true,
+      "reportedTokenLowerBound": 153209,
+      "usageComplete": true,
+      "foregroundRecovery": {
+        "sessions": [],
+        "expectedSessions": [],
+        "missingSessions": [],
+        "zeroModelRequestSessions": {},
+        "usageComplete": true,
+        "requestHeaderCount": 0,
+        "modelCalls": 0,
+        "failedAttemptCalls": 0,
+        "totalTokens": 0,
+        "reportedTotalTokens": 0,
+        "uncachedInputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "reportedCacheReadTokens": 0,
+        "auxiliaryEvents": []
+      },
+      "backgroundReportedTokenLowerBound": 0,
+      "backgroundUsageComplete": true,
+      "maintenanceComplete": true,
+      "backgroundDiagnosis": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "backgroundLearning": {
+        "accounting": {
+          "sessions": [],
+          "expectedSessions": [],
+          "missingSessions": [],
+          "zeroModelRequestSessions": {},
+          "usageComplete": true,
+          "requestHeaderCount": 0,
+          "modelCalls": 0,
+          "failedAttemptCalls": 0,
+          "totalTokens": 0,
+          "reportedTotalTokens": 0,
+          "uncachedInputTokens": 0,
+          "outputTokens": 0,
+          "cacheReadTokens": 0,
+          "reportedCacheReadTokens": 0,
+          "auxiliaryEvents": []
+        },
+        "timing": {
+          "status": "no-session",
+          "spanMs": null,
+          "firstStartedMs": null,
+          "lastEndedMs": null,
+          "sessionElapsedMs": 0
+        },
+        "sessions": []
+      },
+      "capabilityPins": [
+        {
+          "runId": "bed40394-79f0-42e2-a7d3-54efd09249ff",
+          "name": "commit-and-simulate-mr-merge",
+          "version": 2,
+          "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+          "executionSha256": "761ebf82a8ce09699ec28504a74c8f8e64b1b90c06d976d66ebfc16bb1a67c57",
+          "dependencies": []
+        }
+      ],
+      "sourceHashDrift": {},
+      "sessionId": "session-0a045048-48f2-4626-9d27-56dd444f839b",
+      "requestConfigs": [
+        {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "high",
+          "maxTokens": 256000
+        }
+      ]
+    }
+  ],
+  "conditions": {
+    "baseline": {
+      "attempts": 3,
+      "successes": 3,
+      "pending": 0,
+      "elapsedMs": {
+        "knownN": 3,
+        "sum": 223749,
+        "mean": 74583,
+        "median": 75594
+      },
+      "totalTokens": {
+        "knownN": 3,
+        "sum": 732841,
+        "mean": 244280.33333333334,
+        "median": 235817
+      },
+      "modelCalls": {
+        "knownN": 3,
+        "sum": 31,
+        "mean": 10.333333333333334,
+        "median": 10
+      },
+      "backgroundTokens": {
+        "knownN": 3,
+        "sum": 0,
+        "mean": 0,
+        "median": 0
+      }
+    },
+    "workflow": {
+      "attempts": 3,
+      "successes": 3,
+      "pending": 0,
+      "elapsedMs": {
+        "knownN": 3,
+        "sum": 154143,
+        "mean": 51381,
+        "median": 52228
+      },
+      "totalTokens": {
+        "knownN": 3,
+        "sum": 418932,
+        "mean": 139644,
+        "median": 134727
+      },
+      "modelCalls": {
+        "knownN": 3,
+        "sum": 19,
+        "mean": 6.333333333333333,
+        "median": 6
+      },
+      "backgroundTokens": {
+        "knownN": 3,
+        "sum": 0,
+        "mean": 0,
+        "median": 0
+      }
+    }
+  },
+  "relativeChangePercent": {
+    "elapsedMs": {
+      "mean": -31.1089658501267,
+      "median": -30.90986057094478
+    },
+    "totalTokens": {
+      "mean": -42.83453027327893,
+      "median": -42.86798661674095
+    },
+    "modelCalls": {
+      "mean": -38.70967741935485,
+      "median": -40.0
+    },
+    "backgroundTokens": {
+      "mean": null,
+      "median": null
+    }
+  },
+  "conditionsDefinition": {
+    "baseline": "All native capabilities disabled; plugin and tool definitions remain registered; discovery list empty.",
+    "workflow": "Freshly generated workflow v2 and declared skill dependency enabled, with autonomous version evolution allowed."
+  },
+  "scope": "This directory only. All six original attempts retained; caller plus foreground recovery counted once; background diagnosis/learning separate. Automatic learning remains enabled; actual pinned capability versions may evolve.",
+  "notes": [
+    "Unknown settlements remain unknown, failed assistant attempts included.",
+    "Provider conversation tokens are not a monetary bill; unreported title usage separate.",
+    "Caller elapsed includes recovery; background elapsed is not added. n=3 descriptive, not statistical significance."
+  ]
+}
