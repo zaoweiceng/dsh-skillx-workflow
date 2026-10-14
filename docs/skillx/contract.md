@@ -1,6 +1,6 @@
 # DSH 原生执行契约
 
-本文描述当前实现，不是 skillx.yaml 文件格式，也不代表已实现原始草案全部要求。参见[实现映射](implementation-map.md)。
+本文描述当前实现，不是 skillx.yaml 文件格式，也不代表已实现原始草案全部要求。
 
 本插件当前支持 DSH 执行契约。它把 SkillX 存成版本化能力条目，并通过 DSH Skill Provider 暴露给模型。
 

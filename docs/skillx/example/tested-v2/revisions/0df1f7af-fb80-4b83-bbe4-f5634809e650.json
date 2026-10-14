@@ -1,0 +1,159 @@
+{
+  "name": "commit-and-simulate-mr-merge",
+  "description": "Commit local changes, then create, merge and read back a simulated MR on a local loopback mock hosting service.",
+  "content": "End-to-end flow for the local simulated-Git-hosting E2E fixture: stage and commit all pending changes once with a fixed message, then create a simulated MR (POST /api/mrs), merge it (POST /api/mrs/{id}/merge, simulated fast-forward), read the merged state back through GET /api/mrs/{id}, and verify final local and simulated state. It enforces no remotes, fixture identity (optional), service targetHead equal to the pre-commit baseline, exactly one commit after baseline, and mergedSha == sourceSha. Only simulated hosting state changes; the local main branch is never moved and nothing is pushed. Requires git and curl on PATH; the service must be the loopback simulated hosting API documented in API.md. The fixture must be in its pre-run (baseline) state; restore between runs is the caller's responsibility.",
+  "kind": "workflow",
+  "dependencies": [],
+  "execution": {
+    "language": "typescript",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "repoPath": {
+          "type": "string",
+          "description": "Absolute path of the local git repository."
+        },
+        "serviceBaseUrl": {
+          "type": "string",
+          "description": "Base URL of the local simulated Git hosting service (loopback only, e.g. http://127.0.0.1:8876)."
+        },
+        "commitMessage": {
+          "type": "string",
+          "description": "Exact commit message for the single local commit."
+        },
+        "title": {
+          "type": "string",
+          "description": "MR title sent to the simulated service."
+        },
+        "idempotencyKeyCreate": {
+          "type": "string",
+          "description": "Stable unique idempotency key for the MR creation request."
+        },
+        "idempotencyKeyMerge": {
+          "type": "string",
+          "description": "Stable unique idempotency key for the MR merge request."
+        },
+        "expectedChangedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional exact set of git-style paths that must be staged; fails on mismatch."
+        },
+        "baselineRef": {
+          "type": "string",
+          "description": "Ref that must equal the service targetHead before merge. Default: main."
+        },
+        "expectedFixtureId": {
+          "type": "string",
+          "description": "Optional fixture id that must match both the repo .fixture-id and service /health."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "description": "Per-request curl timeout in ms. Default: 10000."
+        }
+      },
+      "required": [
+        "repoPath",
+        "serviceBaseUrl",
+        "commitMessage",
+        "title",
+        "idempotencyKeyCreate",
+        "idempotencyKeyMerge"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "commitSha": {
+          "type": "string"
+        },
+        "baselineSha": {
+          "type": "string"
+        },
+        "mrId": {
+          "type": "string"
+        },
+        "mrStatus": {
+          "type": "string"
+        },
+        "mergedSha": {
+          "type": "string"
+        },
+        "targetHead": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "mainSha": {
+          "type": "string"
+        },
+        "commitsAfterBaseline": {
+          "type": "integer"
+        },
+        "stagedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "path"
+            ]
+          }
+        },
+        "remotes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "finalCleanTree": {
+          "type": "boolean"
+        },
+        "readbackVerified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "commitSha",
+        "baselineSha",
+        "mrId",
+        "mrStatus",
+        "mergedSha",
+        "targetHead",
+        "branch",
+        "finalCleanTree"
+      ]
+    },
+    "program": "const sq = (s) => \"'\" + String(s).replace(/'/g, \"'\\\\''\") + \"'\";\n\nasync function sh(command, description) {\n  const res = await tools.call({ name: \"bash\", arguments: { command, description, workdir: input.repoPath } });\n  if (res.kind !== \"foreground\" || res.exitCode !== 0) {\n    const detail = (res.stderr && res.stderr.text) || JSON.stringify(res);\n    throw new Error(\"bash failed (\" + description + \"): \" + detail);\n  }\n  return res.stdout.text;\n}\n\nasync function httpJson(method, url, body) {\n  const timeoutMs = typeof input.timeoutMs === \"number\" ? input.timeoutMs : 10000;\n  let cmd = \"curl -sS --max-time \" + timeoutMs + \" -w \" + sq(\"\\n%{http_code}\") + \" \";\n  if (method !== \"GET\") {\n    cmd += \"-X \" + method + \" -H \" + sq(\"Content-Type: application/json\") + \" -d \" + sq(JSON.stringify(body)) + \" \";\n  }\n  cmd += sq(url);\n  const res = await tools.call({ name: \"bash\", arguments: { command: cmd, description: method + \" \" + url } });\n  if (res.kind !== \"foreground\" || res.exitCode !== 0) {\n    const detail = (res.stderr && res.stderr.text) || JSON.stringify(res);\n    throw new Error(\"http \" + method + \" \" + url + \" failed: \" + detail);\n  }\n  const out = res.stdout.text;\n  const sep = out.lastIndexOf(\"\\n\");\n  const code = parseInt(out.slice(sep + 1).trim(), 10);\n  const bodyText = out.slice(0, Math.max(sep, 0)).trim();\n  let parsed = null;\n  if (bodyText) parsed = JSON.parse(bodyText);\n  if (isNaN(code) || code < 200 || code >= 300) {\n    throw new Error(\"http \" + method + \" \" + url + \" -> \" + (isNaN(code) ? \"no status\" : String(code)) + (bodyText ? \": \" + bodyText : \"\"));\n  }\n  return parsed;\n}\n\nif (typeof input.repoPath !== \"string\" || !input.repoPath) throw new Error(\"repoPath is required\");\nif (typeof input.serviceBaseUrl !== \"string\" || !input.serviceBaseUrl) throw new Error(\"serviceBaseUrl is required\");\nif (typeof input.commitMessage !== \"string\" || !input.commitMessage.trim()) throw new Error(\"commitMessage is required\");\nif (typeof input.title !== \"string\" || !input.title.trim()) throw new Error(\"title is required\");\nif (typeof input.idempotencyKeyCreate !== \"string\" || !input.idempotencyKeyCreate) throw new Error(\"idempotencyKeyCreate is required\");\nif (typeof input.idempotencyKeyMerge !== \"string\" || !input.idempotencyKeyMerge) throw new Error(\"idempotencyKeyMerge is required\");\nconst baselineRef = (typeof input.baselineRef === \"string\" && input.baselineRef) ? input.baselineRef : \"main\";\nconst base = String(input.serviceBaseUrl).replace(/\\/+$/, \"\");\n\nconst remoteOut = (await sh(\"git remote -v\", \"List configured remotes\")).trim();\nconst remotes = remoteOut ? remoteOut.split(/\\r?\\n/).map((l) => l.trim()).filter(Boolean) : [];\nif (remotes.length > 0) throw new Error(\"refusing to run: git remotes configured: \" + remotes.join(\"; \"));\nconst branch = (await sh(\"git branch --show-current\", \"Show current branch\")).trim();\nif (!branch) throw new Error(\"detached HEAD or unknown branch; a checked-out branch is required\");\n\nconst health = await httpJson(\"GET\", base + \"/health\");\nif (health.simulation !== true) throw new Error(\"service at \" + base + \" is not the simulated hosting service\");\nconst state0 = await httpJson(\"GET\", base + \"/api/state\");\nif (input.expectedFixtureId) {\n  if (health.fixtureId !== input.expectedFixtureId) throw new Error(\"fixture id mismatch (service): \" + health.fixtureId);\n  const repoFixture = (await sh(\"cat .fixture-id 2>/dev/null || true\", \"Read local fixture id\")).trim();\n  if (repoFixture && repoFixture !== input.expectedFixtureId) throw new Error(\"fixture id mismatch (repo): \" + repoFixture);\n}\n\nconst baselineSha = (await sh(\"git rev-parse \" + sq(baselineRef), \"Resolve baseline ref\")).trim();\n\nasync function tryAlreadyCompleted() {\n  const headSha = (await sh(\"git rev-parse HEAD\", \"Resolve HEAD sha\")).trim();\n  const headParent = (await sh(\"git rev-parse HEAD^ 2>/dev/null || true\", \"Resolve parent of HEAD\")).trim();\n  const headSubject = (await sh(\"git log -1 --format=%s\", \"Show HEAD subject\")).trim();\n  const headStatus = (await sh(\"git status --porcelain\", \"Check working tree\")).trim();\n  const headCount = parseInt((await sh(\"git rev-list --count \" + sq(baselineSha + \"..HEAD\"), \"Count commits after baseline\")).trim(), 10);\n  if (headSubject !== input.commitMessage || headParent !== baselineSha || headCount !== 1 || headStatus) return null;\n  const auditKeys = (Array.isArray(state0.audit) ? state0.audit : [])\n    .map((e) => e && e.detail && e.detail.request && e.detail.request.idempotencyKey)\n    .filter(Boolean);\n  const mrs = Array.isArray(state0.mrs) ? state0.mrs : [];\n  const mergedMr = mrs.find((m) => m && m.status === \"merged\" && m.sourceSha === headSha && m.mergedSha === headSha && String(m.targetBase) === baselineSha);\n  if (!auditKeys.includes(input.idempotencyKeyCreate) || !auditKeys.includes(input.idempotencyKeyMerge) || !mergedMr || state0.targetHead !== headSha) return null;\n  const readback = await httpJson(\"GET\", base + \"/api/mrs/\" + String(mergedMr.id));\n  if (!readback || readback.status !== \"merged\" || readback.mergedSha !== headSha || readback.targetHead !== headSha) {\n    throw new Error(\"already-completed run detected but MR readback is inconsistent: \" + JSON.stringify(readback));\n  }\n  const changedOut = (await sh(\"git show --name-status --format= HEAD\", \"List commit changed paths\")).trim();\n  const stagedFiles = changedOut\n    ? changedOut.split(/\\r?\\n/).filter(Boolean).map((l) => {\n        const parts = l.split(\"\\t\");\n        return { status: parts[0], path: parts.slice(1).join(\"\\t\") };\n      })\n    : [];\n  if (Array.isArray(input.expectedChangedPaths)) {\n    const actual = stagedFiles.map((f) => f.path).sort();\n    const expected = input.expectedChangedPaths.map(String).sort();\n    if (JSON.stringify(actual) !== JSON.stringify(expected)) {\n      throw new Error(\"already-completed commit file set mismatch: got \" + JSON.stringify(actual) + \", expected \" + JSON.stringify(expected));\n    }\n  }\n  const mainSha = (await sh(\"git rev-parse \" + sq(baselineRef), \"Resolve baseline ref at end\")).trim();\n  if (mainSha !== baselineSha) throw new Error(\"local baseline ref moved: \" + mainSha + \" != \" + baselineSha);\n  return {\n    commitSha: headSha,\n    baselineSha,\n    mrId: String(mergedMr.id),\n    mrStatus: readback.status,\n    mergedSha: readback.mergedSha,\n    targetHead: readback.targetHead,\n    branch,\n    mainSha,\n    commitsAfterBaseline: headCount,\n    stagedFiles,\n    remotes,\n    finalCleanTree: true,\n    readbackVerified: true,\n  };\n}\n\nif (state0.targetHead !== baselineSha) {\n  const done = await tryAlreadyCompleted();\n  if (done) return done;\n  throw new Error(\"service targetHead (\" + state0.targetHead + \") does not match baseline \" + baselineSha + \" and the repo/service state does not match an already-completed run with these inputs; restore the fixture or adjust baselineRef\");\n}\n\nawait sh(\"git add -A\", \"Stage all pending changes\");\nconst stagedOut = (await sh(\"git diff --cached --name-status\", \"List staged file changes\")).trim();\nconst stagedFiles = stagedOut\n  ? stagedOut.split(/\\r?\\n/).filter(Boolean).map((l) => {\n      const parts = l.split(\"\\t\");\n      return { status: parts[0], path: parts.slice(1).join(\"\\t\") };\n    })\n  : [];\nif (stagedFiles.length === 0) throw new Error(\"nothing to stage; no pending changes to commit\");\nif (Array.isArray(input.expectedChangedPaths)) {\n  const actual = stagedFiles.map((f) => f.path).sort();\n  const expected = input.expectedChangedPaths.map(String).sort();\n  if (JSON.stringify(actual) !== JSON.stringify(expected)) {\n    throw new Error(\"staged file set mismatch: got \" + JSON.stringify(actual) + \", expected \" + JSON.stringify(expected));\n  }\n}\n\nawait sh(\"git commit -m \" + sq(input.commitMessage), \"Create single local commit\");\nconst commitSha = (await sh(\"git rev-parse HEAD\", \"Resolve new HEAD sha\")).trim();\nconst parentSha = (await sh(\"git rev-parse HEAD^\", \"Resolve parent of new commit\")).trim();\nconst subject = (await sh(\"git log -1 --format=%s\", \"Show commit subject\")).trim();\nif (subject !== input.commitMessage) throw new Error(\"commit subject mismatch: got '\" + subject + \"'\");\nconst postCommitStatus = (await sh(\"git status --porcelain\", \"Verify clean tree after commit\")).trim();\nif (postCommitStatus) throw new Error(\"working tree not clean after commit: \" + postCommitStatus);\nconst countOut = (await sh(\"git rev-list --count \" + sq(baselineSha + \"..HEAD\"), \"Count commits after baseline\")).trim();\nconst commitsAfterBaseline = parseInt(countOut, 10);\nif (commitsAfterBaseline !== 1) throw new Error(\"expected exactly 1 commit after baseline, got \" + commitsAfterBaseline);\nif (parentSha !== baselineSha) throw new Error(\"commit parent does not match baseline: \" + parentSha + \" != \" + baselineSha);\n\nconst created = await httpJson(\"POST\", base + \"/api/mrs\", {\n  sourceSha: commitSha,\n  targetBase: baselineSha,\n  title: input.title,\n  idempotencyKey: input.idempotencyKeyCreate,\n});\nif (!created || created.status !== \"opened\") throw new Error(\"MR create did not return opened: \" + JSON.stringify(created));\nif (created.sourceSha !== commitSha || created.targetBase !== baselineSha) throw new Error(\"MR create echoed unexpected SHAs: \" + JSON.stringify(created));\nconst mrId = String(created.id);\nif (!mrId) throw new Error(\"MR create returned no id\");\n\nconst merged = await httpJson(\"POST\", base + \"/api/mrs/\" + mrId + \"/merge\", {\n  expectedHead: commitSha,\n  expectedTargetHead: baselineSha,\n  idempotencyKey: input.idempotencyKeyMerge,\n});\nif (!merged || merged.status !== \"merged\") throw new Error(\"MR merge did not return merged: \" + JSON.stringify(merged));\nif (merged.mergedSha !== commitSha) throw new Error(\"mergedSha does not equal sourceSha: \" + merged.mergedSha);\n\nconst readback = await httpJson(\"GET\", base + \"/api/mrs/\" + mrId);\nif (!readback || readback.status !== \"merged\") throw new Error(\"readback status is not merged: \" + JSON.stringify(readback));\nif (readback.mergedSha !== commitSha || readback.targetHead !== commitSha) throw new Error(\"readback SHAs inconsistent: \" + JSON.stringify(readback));\nconst state1 = await httpJson(\"GET\", base + \"/api/state\");\nif (state1.targetHead !== commitSha) throw new Error(\"service targetHead after merge is not the commit sha: \" + state1.targetHead);\n\nconst finalStatus = (await sh(\"git status --porcelain\", \"Verify final clean tree\")).trim();\nconst finalCleanTree = finalStatus.length === 0;\nif (!finalCleanTree) throw new Error(\"working tree not clean at end: \" + finalStatus);\nconst finalHead = (await sh(\"git rev-parse HEAD\", \"Resolve final HEAD sha\")).trim();\nif (finalHead !== commitSha) throw new Error(\"local HEAD moved after merge: \" + finalHead);\nconst mainSha = (await sh(\"git rev-parse \" + sq(baselineRef), \"Resolve baseline ref at end\")).trim();\nif (mainSha !== baselineSha) throw new Error(\"local baseline ref moved: \" + mainSha + \" != \" + baselineSha);\n\nreturn {\n  commitSha,\n  baselineSha,\n  mrId,\n  mrStatus: readback.status,\n  mergedSha: readback.mergedSha,\n  targetHead: readback.targetHead,\n  branch,\n  mainSha,\n  commitsAfterBaseline,\n  stagedFiles,\n  remotes,\n  finalCleanTree,\n  readbackVerified: true,\n};"
+  },
+  "sourceSessionId": "f76f9c7c-dd83-4bd2-9170-85e0071b2b30",
+  "generatorSessionId": "feb0c49f-fa23-4d4f-b251-e5e0aa0e86b9",
+  "operation": "optimize",
+  "evidence": {
+    "provider": "dsh",
+    "status": "completed",
+    "sessionId": "feb0c49f-fa23-4d4f-b251-e5e0aa0e86b9",
+    "sourceDigests": {
+      "f76f9c7c-dd83-4bd2-9170-85e0071b2b30": "f76960965fcb539993e9f5fa6f60090a9a567d51f377d51cb261991008b3adf1"
+    },
+    "reviewedSessionIds": [
+      "f76f9c7c-dd83-4bd2-9170-85e0071b2b30"
+    ]
+  },
+  "validationNotes": "Evidence reviewed: complete recovery trace for session f76f9c7c-dd83-4bd2-9170-85e0071b2b30 (all 6 pages), including the original execution receipt for commit-and-simulate-mr-merge v1 (runId 23d4b455-1493-4601-bf79-6cf2abfd39ba) and the read-only recovery verification. The observed defect: the capability failed with PROGRAM_EXCEPTION at its own precondition guard — \"service targetHead (9107b9ad…) does not match baseline 214b141b…\" — because an earlier run with identical idempotency keys (e2e-fixture-create-20261014-v1 / e2e-fixture-merge-20261014-v1) had already completed the full pipeline. Evidence-backed post-state: /api/state audit shows mr.create then mr.merge:1 with those keys; MR 1 merged with sourceSha == mergedSha == targetHead == HEAD 9107b9ad… and targetBase == baseline; repo HEAD subject == commitMessage, parent == baseline, exactly 1 commit after baseline, clean tree, no remotes, .fixture-id match; changed paths exactly the expected 5 (A data/sample.json, M docs/checklist.md, A notes.txt, M src/message.txt, A src/new-feature.txt). Even past the precondition the pipeline would next have failed with \"nothing to stage\". Fix: when service targetHead != baseline, attempt already-completed detection (local HEAD subject/parent/rev-list count/clean-tree; service audit idempotency keys; a merged MR with sourceSha == mergedSha == HEAD and targetBase == baseline; state0.targetHead == HEAD), then live-readback GET /api/mrs/{id} (status merged, mergedSha == targetHead == HEAD) and verify the commit's changed paths against expectedChangedPaths when provided, returning the same schema-compliant output with readbackVerified: true. Fresh-fixture behavior, all other checks, input/output schemas and dependencies are unchanged; no new tools (only bash, whose contract was re-read). Limitations: a crash between local commit and MR create (repo committed but service targetHead still at baseline) is not covered by this evidence and still fails at \"nothing to stage\"; detection returns null and the guard still throws for genuinely stale/corrupt fixtures.",
+  "version": 2,
+  "revisionId": "0df1f7af-fb80-4b83-bbe4-f5634809e650",
+  "previousRevisionId": "9fadfae6-e156-4339-8298-11893866c9b5",
+  "createdAt": "2026-10-14T09:57:40.488Z",
+  "enabled": true
+}

@@ -1,6 +1,6 @@
 # SkillX 编写约定
 
-本文区分包规范与插件约定。规范性字段以[原始草案](reference/specification.md)为准；当前可执行范围以[实现映射](implementation-map.md)和[DSH 契约](contract.md)为准。以下建议不代表插件已实现通用 SkillX 包导入。
+本文区分包规范与插件约定。规范性字段以[原始草案](reference/specification.md)为准；当前可执行范围以[DSH 契约](contract.md)为准。以下建议不代表插件已实现通用 SkillX 包导入。
 
 原始草案要求保留 `SKILL.md` 和 `skillx.yaml`。仅包含指南的包可以是 Guide-only；只有完整声明并由 Host 支持的执行接口，才能宣称可被工作流调用。
 
@@ -67,7 +67,7 @@
 
 ## Header 与清单分工
 
-`SKILL.md` 的 YAML frontmatter 必需 `name` 和 `description`；`name` 必须与清单 `metadata.name` 完全一致，description 建议一致。推荐附加 `license`、`compatibility` 和 `metadata.skillx.manifest` / `metadata.skillx.version`，见[示例 header](example/SKILL.md)。许可证必须真实，未确定时不要照抄 Apache-2.0。
+`SKILL.md` 的 YAML frontmatter 必需 `name` 和 `description`；`name` 必须与清单 `metadata.name` 完全一致，description 建议一致。推荐附加 `license`、`compatibility` 和 `metadata.skillx.manifest` / `metadata.skillx.version`，见[示例 header](example/demo/SKILL.md)。许可证必须真实，未确定时不要照抄 Apache-2.0。
 
 `skillx.version` 是能力包版本，不是规范版本；`apiVersion` 放在清单里，原草案为 `skillx.dev/v1alpha1`。Schema、权限、副作用、依赖和执行入口属于清单，不应为了补齐 header 全部重复塞进 frontmatter。
 

@@ -1,4 +1,3 @@
-# 原始草案的 Guide-only 包：不声明可执行接口。
 apiVersion: skillx.dev/v1alpha1
 kind: SkillX
 metadata:

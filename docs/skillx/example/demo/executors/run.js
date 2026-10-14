@@ -1,5 +1,4 @@
 /**
- * 未接入的实现参考：不是原规范 Runtime Profile，也不是可直接导入的 DSH 能力。
  *
  * 约定：
  * - input 已经通过 schemas/input.schema.json 校验。

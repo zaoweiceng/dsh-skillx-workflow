@@ -53,8 +53,8 @@
 
 - [原始 SkillX 规范全文](reference/specification.md)：保留 0.1.0-draft 草案，清单版本 v1alpha1。
 - [编写约定](conventions.md)：Header、清单及当前插件约定的边界。
-- [原规范与实现映射](implementation-map.md)：哪些概念已落地，哪些包格式尚未支持。
-- [当前 DSH 执行契约](contract.md)：实际可调用接口。
-- [Guide-only 包示例](example/README.md)：展示包头和清单，不冒充可直接执行的插件能力。
+- [当前 DSH 执行契约](contract.md)：实际可调用接口，以及哪些原始草案概念尚未支持。
+- [实测能力示例](example/tested-v2/README.md)：原生 Agent 生成的工作流 v2 与配套 SkillX v1，保留原始修订。
+- [Guide-only 演示](example/demo/README.md)：展示包头和清单，不冒充可直接执行的插件能力。
 
 上文描述的效率收益来自特定测试，不是任何 SkillX 包的性能保证。原规范中的 Guide 可按需加载，与本插件对调用方仅暴露契约的策略可以并存；不要求把实现全文放回调用上下文。

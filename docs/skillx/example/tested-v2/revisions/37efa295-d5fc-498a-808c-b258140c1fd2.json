@@ -1,0 +1,113 @@
+{
+  "name": "commit-local-changes",
+  "description": "Stage and commit all pending changes in one local commit with a fixed message; no push or remotes.",
+  "content": "Stages all pending changes (git add -A) in a local repo and creates exactly one commit with a fixed message on the current branch. It verifies the exact staged file set, a clean working tree, a single commit whose parent equals the pre-commit baseline, and absence of git remotes. It never pushes, never creates branches, and performs no hosting/remote operations. Inputs generalize the repo path, message, expected file set, and baseline ref; all checks are re-run on every invocation. Fails closed on configured remotes, empty or mismatched staged set, dirty tree, or parent/baseline mismatch.",
+  "kind": "skill",
+  "dependencies": [],
+  "execution": {
+    "language": "typescript",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "repoPath": {
+          "type": "string",
+          "description": "Absolute path of the local git repository."
+        },
+        "commitMessage": {
+          "type": "string",
+          "description": "Exact commit message to use for the single commit."
+        },
+        "expectedChangedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional exact set of git-style paths (e.g. docs/checklist.md) that must be staged after add -A. Fails on mismatch."
+        },
+        "baselineRef": {
+          "type": "string",
+          "description": "Ref resolved before committing, used to verify exactly one commit after it. Default: main."
+        },
+        "requireNoRemotes": {
+          "type": "boolean",
+          "description": "Fail if any git remote is configured. Default: true."
+        }
+      },
+      "required": [
+        "repoPath",
+        "commitMessage"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "commitSha": {
+          "type": "string"
+        },
+        "parentSha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "stagedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "path"
+            ]
+          }
+        },
+        "commitsAfterBaseline": {
+          "type": "integer"
+        },
+        "cleanTree": {
+          "type": "boolean"
+        },
+        "remotes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "commitSha",
+        "parentSha",
+        "branch",
+        "cleanTree"
+      ]
+    },
+    "program": "const sq = (s) => \"'\" + String(s).replace(/'/g, \"'\\\\''\") + \"'\";\n\nasync function sh(command, description) {\n  const res = await tools.call({ name: \"bash\", arguments: { command, description, workdir: input.repoPath } });\n  if (res.kind !== \"foreground\" || res.exitCode !== 0) {\n    const detail = (res.stderr && res.stderr.text) || JSON.stringify(res);\n    throw new Error(\"bash failed (\" + description + \"): \" + detail);\n  }\n  return res.stdout.text;\n}\n\nif (typeof input.repoPath !== \"string\" || !input.repoPath) throw new Error(\"repoPath is required\");\nif (typeof input.commitMessage !== \"string\" || !input.commitMessage.trim()) throw new Error(\"commitMessage is required\");\nconst requireNoRemotes = input.requireNoRemotes !== false;\nconst baselineRef = (typeof input.baselineRef === \"string\" && input.baselineRef) ? input.baselineRef : \"main\";\n\nconst remoteOut = (await sh(\"git remote -v\", \"List configured remotes\")).trim();\nconst remotes = remoteOut ? remoteOut.split(/\\r?\\n/).map((l) => l.trim()).filter(Boolean) : [];\nif (requireNoRemotes && remotes.length > 0) throw new Error(\"refusing to commit: git remotes configured: \" + remotes.join(\"; \"));\nconst branch = (await sh(\"git branch --show-current\", \"Show current branch\")).trim();\nif (!branch) throw new Error(\"detached HEAD or unknown branch; a checked-out branch is required\");\n\nconst baselineSha = (await sh(\"git rev-parse \" + sq(baselineRef), \"Resolve baseline ref\")).trim();\n\nawait sh(\"git add -A\", \"Stage all pending changes\");\nconst stagedOut = (await sh(\"git diff --cached --name-status\", \"List staged file changes\")).trim();\nconst stagedFiles = stagedOut\n  ? stagedOut.split(/\\r?\\n/).filter(Boolean).map((l) => {\n      const parts = l.split(\"\\t\");\n      return { status: parts[0], path: parts.slice(1).join(\"\\t\") };\n    })\n  : [];\nif (stagedFiles.length === 0) throw new Error(\"nothing to stage; no pending changes to commit\");\nif (Array.isArray(input.expectedChangedPaths)) {\n  const actual = stagedFiles.map((f) => f.path).sort();\n  const expected = input.expectedChangedPaths.map(String).sort();\n  if (JSON.stringify(actual) !== JSON.stringify(expected)) {\n    throw new Error(\"staged file set mismatch: got \" + JSON.stringify(actual) + \", expected \" + JSON.stringify(expected));\n  }\n}\n\nawait sh(\"git commit -m \" + sq(input.commitMessage), \"Create single local commit\");\nconst commitSha = (await sh(\"git rev-parse HEAD\", \"Resolve new HEAD sha\")).trim();\nconst parentSha = (await sh(\"git rev-parse HEAD^\", \"Resolve parent of new commit\")).trim();\nconst subject = (await sh(\"git log -1 --format=%s\", \"Show commit subject\")).trim();\nif (subject !== input.commitMessage) throw new Error(\"commit subject mismatch: got '\" + subject + \"'\");\n\nconst postStatus = (await sh(\"git status --porcelain\", \"Verify clean working tree\")).trim();\nconst cleanTree = postStatus.length === 0;\nif (!cleanTree) throw new Error(\"working tree not clean after commit: \" + postStatus);\nconst countOut = (await sh(\"git rev-list --count \" + sq(baselineSha + \"..HEAD\"), \"Count commits after baseline\")).trim();\nconst commitsAfterBaseline = parseInt(countOut, 10);\nif (commitsAfterBaseline !== 1) throw new Error(\"expected exactly 1 commit after baseline, got \" + commitsAfterBaseline);\nif (parentSha !== baselineSha) throw new Error(\"commit parent does not match baseline: \" + parentSha + \" != \" + baselineSha);\n\nreturn { commitSha, parentSha, branch, stagedFiles, commitsAfterBaseline, cleanTree, remotes };"
+  },
+  "sourceSessionId": "session-8ae43c38-7960-406f-9c62-246f6b50ccf6",
+  "generatorSessionId": "ccb5dd46-497c-4d6c-9679-9c75dc40b5bb",
+  "operation": "extract",
+  "evidence": {
+    "provider": "dsh",
+    "status": "completed",
+    "sessionId": "ccb5dd46-497c-4d6c-9679-9c75dc40b5bb",
+    "sourceDigests": {
+      "session-8ae43c38-7960-406f-9c62-246f6b50ccf6": "a147af7f0ae5bbf27141afdfbf3efc9b2b283c8c198f276ed8cb0a76373a7661"
+    },
+    "reviewedSessionIds": [
+      "session-8ae43c38-7960-406f-9c62-246f6b50ccf6"
+    ]
+  },
+  "validationNotes": "Reviewed execution records of session-8ae43c38-7960-406f-9c62-246f6b50ccf6: pre-commit status showed 2 modified (docs/checklist.md, src/message.txt) + 3 untracked (data/sample.json, notes.txt, src/new-feature.txt); git add -A staged exactly those 5 files (A/M name-status); one commit 00309da… with message 'test: update commit e2e fixture' on branch work, parent 214b141…, working tree clean, no remotes, fixture id unchanged. Program generalizes repoPath/commitMessage/expectedChangedPaths/baselineRef, re-derives all SHAs per run, and fails closed on remotes, empty/mismatched staged set, non-clean tree, subject mismatch, or parent/count mismatch. Requires git on PATH and workspace-write access to the repo. Historical success is not proof of future state; every invocation re-verifies.",
+  "version": 1,
+  "revisionId": "37efa295-d5fc-498a-808c-b258140c1fd2",
+  "previousRevisionId": null,
+  "createdAt": "2026-10-14T09:41:06.049Z",
+  "enabled": true
+}

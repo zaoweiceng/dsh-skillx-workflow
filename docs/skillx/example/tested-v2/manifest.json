@@ -1,0 +1,28 @@
+{
+  "exportedAt": "2026-10-15",
+  "source": "native-workflows-a700fe4-fresh",
+  "format": "DSH native capability snapshot",
+  "files": [
+    {
+      "path": "revisions/37efa295-d5fc-498a-808c-b258140c1fd2.json",
+      "sha256": "d5f0e22f08c3dcd51274a0da946e3c51d3268fe366babfeefd6ce21fbe8b4431"
+    },
+    {
+      "path": "revisions/37efa295-d5fc-498a-808c-b258140c1fd2.md",
+      "sha256": "f382a95233275f25ea0a167140c21e18c10334ef049e32ab023b6d45a272c709"
+    },
+    {
+      "path": "revisions/0df1f7af-fb80-4b83-bbe4-f5634809e650.json",
+      "sha256": "957b109ef754e3e1b01d66e6ed1767fb4643b9c28605d8de29497a5b767f076d"
+    },
+    {
+      "path": "revisions/0df1f7af-fb80-4b83-bbe4-f5634809e650.md",
+      "sha256": "975353827a59b1ef9c0f6cde6c236c7b1177323faaa268ae6a1b1d1c21cfeeb3"
+    },
+    {
+      "path": "catalog.json",
+      "sha256": "aaffbd3528224a2ce59d5e24c62f693050074dfd32deaf386be12b0ff0279ab9"
+    }
+  ],
+  "redaction": "Local username [original username] replaced with USER where present; sha256 describes archived files."
+}
