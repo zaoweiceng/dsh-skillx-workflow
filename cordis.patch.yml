@@ -1,0 +1,4 @@
+- insert:
+    - id: skillx-workflow
+      name: dsh-skillx-workflow
+      config: {}

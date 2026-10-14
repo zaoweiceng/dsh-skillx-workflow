@@ -1,0 +1,7 @@
+node_modules/
+.local/
+.runtime/
+dist/
+*.tgz
+*.backup
+.DS_Store

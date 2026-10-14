@@ -1,0 +1,6 @@
+.local/
+.runtime/
+node_modules/
+tests/
+*.backup
+*.tgz
