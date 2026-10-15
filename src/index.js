@@ -1,6 +1,8 @@
 import { join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { createNativeUiRuns } from './native-ui-runs.js';
+import { createNativeMonitoring } from './native-monitoring.js';
 import { createStore } from './native-store.js';
 import { registerNativeSkills } from './native-skills.js';
 import { createNativeAgentService } from './native-agent.js';
@@ -13,11 +15,16 @@ export const name = 'dsh-skillx-workflow';
 export const inject = ['webServer', 'sessionQuery', 'agents', 'sessions', 'agentDefaultModel', 'tools', 'systemPrompt', 'skills'];
 export function resolveConfig(config = {}) {
   const result = { dataRoot: config.dataRoot, enableCapabilities: config.enableCapabilities ?? true,
-    timeoutMs: config.timeoutMs ?? 600000, maxSteps: config.maxSteps ?? 20 };
+    timeoutMs: config.timeoutMs ?? 1800000, maxTimeoutMs: config.maxTimeoutMs ?? 14400000,
+    recordsPerBudgetUnit: config.recordsPerBudgetUnit ?? 100, bytesPerBudgetUnit: config.bytesPerBudgetUnit ?? 262144,
+    maxSteps: config.maxSteps, contractReview: config.contractReview ?? false };
+  if (typeof result.contractReview !== 'boolean') throw new Error('contractReview must be boolean');
   if (typeof result.enableCapabilities !== 'boolean') throw new Error('enableCapabilities must be boolean');
   if (result.dataRoot !== undefined && (typeof result.dataRoot !== 'string' || !isAbsolute(result.dataRoot) || result.dataRoot.includes('\0'))) throw new Error('dataRoot must be an absolute local path');
-  if (!Number.isInteger(result.timeoutMs) || result.timeoutMs < 100 || result.timeoutMs > 3600000) throw new Error('Invalid timeoutMs');
-  if (!Number.isInteger(result.maxSteps) || result.maxSteps < 1 || result.maxSteps > 100) throw new Error('Invalid maxSteps');
+  if (!Number.isInteger(result.timeoutMs) || result.timeoutMs < 100 || result.timeoutMs > 14400000) throw new Error('Invalid timeoutMs');
+  if (result.maxSteps !== undefined && (!Number.isSafeInteger(result.maxSteps) || result.maxSteps < 1)) throw new Error('Invalid maxSteps');
+  if (!Number.isSafeInteger(result.maxTimeoutMs) || result.maxTimeoutMs < result.timeoutMs || result.maxTimeoutMs > 86400000) throw new Error('Invalid maxTimeoutMs');
+  for (const key of ['recordsPerBudgetUnit', 'bytesPerBudgetUnit']) if (!Number.isSafeInteger(result[key]) || result[key] < 1) throw new Error('Invalid adaptive budget scale');
   return result;
 }
 const publicReceipt = receipt => JSON.parse(JSON.stringify({ runId: receipt?.runId, status: receipt?.status, capability: receipt?.capability, outputDigest: receipt?.outputDigest }));
@@ -30,20 +37,23 @@ export function apply(ctx, config) {
   const dataRoot = settings.dataRoot ?? join(profile?.dir || process.env.DSH_HOME || join(homedir(), '.dsh'), 'native-workflows');
   const store = createStore({ dataRoot });
   const service = createNativeAgentService(ctx, store, { ...settings, dataRoot });
+  const monitoring = createNativeMonitoring({ dataRoot, store, learningService: service, sessionQuery: ctx.sessionQuery });
   const recovery = createNativeRecoveryService(ctx, { store, learningService: service, dataRoot });
+  const uiRuns = createNativeUiRuns(ctx, store, { dataRoot });
   const execution = createNativeExecutionService(ctx, store, { dataRoot, reason: (...args) => recovery.reason(...args) });
   ctx.effect(() => () => service.dispose());
   ctx.effect(() => () => execution.dispose());
   ctx.effect(() => () => recovery.dispose());
+  ctx.effect(() => () => uiRuns.dispose());
   if (settings.enableCapabilities) {
     ctx.effect(() => registerNativeSkills(ctx, store));
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'capability_run',
       description: 'Execute a native SkillX/workflow as a black box. Discover purpose and input/output schema with skill; supply input and consume the verified output. Internal execution and bounded repair happen within this same call. Do not repeat its internal operations. timeoutMs limits foreground execution and recovery (default 600000). Evidence-based background capability maintenance has an independent budget and may continue after timeout, without replaying business operations. External blockers are returned for caller action.',
-      parameters: { name: { type: 'string', required: true, description: 'Exact enabled capability name' }, input: { type: 'json', required: true, description: 'JSON object matching the capability input schema' }, timeoutMs: { type: 'integer', description: 'Total hard time budget in milliseconds, including recovery; 1000 to 600000' } },
+      parameters: { name: { type: 'string', required: true, description: 'Exact enabled capability name' }, input: { type: 'json', required: true, description: 'JSON object matching the capability input schema' }, expectedRevisionId: { type: 'string', description: 'Optional exact revision selected in the execution UI' }, timeoutMs: { type: 'integer', description: 'Total hard time budget in milliseconds, including recovery; 1000 to 600000' } },
       output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       isConcurrencySafe: () => false,
-      execute: async ({ name, input, timeoutMs = 600000 }, exec) => {
+      execute: async ({ name, input, expectedRevisionId, timeoutMs = 600000 }, exec) => {
         if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw new Error('timeoutMs must be between 1000 and 600000');
         const deadline = Date.now() + timeoutMs;
         const controller = new AbortController();
@@ -51,7 +61,7 @@ export function apply(ctx, config) {
         const timer = setTimeout(() => controller.abort(), timeoutMs); timer.unref?.();
         const scopedExec = { ...exec, signal };
         try {
-          const result = await execution.run({ name, input, timeoutMs: Math.min(120000, timeoutMs), deadline }, scopedExec);
+          const result = await execution.run({ name, input, expectedRevisionId, timeoutMs: Math.min(120000, timeoutMs), deadline }, scopedExec);
           if (result.ok && !signal.aborted && Date.now() < deadline) return { status: 'completed', output: result.output, receipt: publicReceipt(result.receipt) };
           const entry = result.entry ?? await store.get(name);
           if (!entry?.execution) return { status: 'blocked', error: { category: 'configuration', code: 'CAPABILITY_NOT_EXECUTABLE', message: 'The capability needs a native Agent-generated executable contract.' }, receipt: publicReceipt(result.receipt) };
@@ -94,6 +104,18 @@ export function apply(ctx, config) {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > 8192) throw new Error('Request too large'); }
         return raw ? JSON.parse(raw) : {};
       };
+      if (req.method === 'POST' && route === 'runs') return send(202, await uiRuns.start(await readBody()));
+      if (req.method === 'GET' && route === 'runs') return send(200, await uiRuns.list(url.searchParams.get('name')));
+      if (req.method === 'GET' && /^runs\/[^/]+$/.test(route)) { const job = await uiRuns.get(route.split('/')[1]); return job ? send(200, job) : send(404, { error: 'Execution not found' }); }
+      if (req.method === 'POST' && /^runs\/[^/]+\/cancel$/.test(route)) { const job = await uiRuns.cancel(route.split('/')[1]); return job ? send(200, job) : send(404, { error: 'Execution not found' }); }
+      if (req.method === 'POST' && route === 'prepare') {
+        const body = await readBody(), entry = await store.get(body.name, { includeDisabled: true });
+        if (!entry || !entry.sourceSessionId) return send(400, { error: 'Original extraction evidence is unavailable' });
+        return send(202, await service.start({ operation: 'optimize', name: entry.name, sessionId: entry.sourceSessionId, prepareExecution: true }));
+      }
+      if (req.method === 'GET' && route.startsWith('monitoring/metrics/')) return send(200, await monitoring.metric(route.slice('monitoring/metrics/'.length), url.searchParams));
+      if (req.method === 'GET' && route === 'monitoring/sessions') return send(200, await monitoring.sessions(url.searchParams));
+      if (req.method === 'GET' && route.startsWith('monitoring/records/')) return send(200, await monitoring.records(route.slice('monitoring/records/'.length), url.searchParams));
       if (req.method === 'GET' && route === 'runtime') return send(200, { mode: 'native-agent', dataRoot, enableCapabilities: settings.enableCapabilities });
       if (req.method === 'GET' && route === 'catalog') {
         const [capabilities, workflows] = await Promise.all([store.list('skill', { includeDisabled: true }), store.list('workflow', { includeDisabled: true })]);
@@ -107,9 +129,14 @@ export function apply(ctx, config) {
         const entryName = decodeURIComponent(route.split('/')[1]);
         const body = await readBody(); return send(200, await store.setEnabled(entryName, body.enabled));
       }
+      if (req.method === 'DELETE' && /^entries\/[^/]+$/.test(route)) {
+        const body = await readBody();
+        const result = await store.remove(decodeURIComponent(route.split('/')[1]), { version: body.version, revisionId: body.revisionId });
+        return result ? send(200, result) : send(404, { error: 'Capability not found' });
+      }
       if (req.method === 'POST' && ['extract', 'optimize'].includes(route)) {
         const body = await readBody();
-        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, operation: route });
+        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, operation: route, reviewFindings: body.reviewFindings });
         return send(202, task);
       }
       if (req.method === 'GET' && route === 'status') {
@@ -118,6 +145,6 @@ export function apply(ctx, config) {
       }
       if (req.method === 'POST' && route === 'cancel') { const body = await readBody(); const task = await service.cancel(body.taskId); return task ? send(200, task) : send(404, { error: 'Task not found' }); }
       return send(404, { error: 'Unknown native workflow route' });
-    } catch (error) { send(400, { error: error.message }); }
+    } catch (error) { send(error.statusCode ?? 400, { error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.dependents ? { dependents: error.dependents } : {}) }); }
   } }));
 }

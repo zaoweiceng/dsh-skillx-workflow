@@ -40,7 +40,7 @@ export function createNativeExecutionService(ctx, store, {
     const runId = randomUUID(); const directory = join(tracesRoot, runId);
     await mkdir(directory, { mode: 0o700 });
     const header = { runId, sessionId: exec.agent.session.header.id, rootCallId: exec.rootCallId,
-      startedAt: new Date().toISOString(), deadline, constraints };
+      startedAt: new Date().toISOString(), deadline, capability: options.capability, constraints };
     const ledger = { ...header, directory, steps: [], implementations: [], relatedSessions: [], usage: [], reuse: new Map(), count: 0,
       controller: new AbortController(), pending: new Set(), toolTail: Promise.resolve(), logTail: Promise.resolve(), nativeFailures: [] };
     ledger.signal = AbortSignal.any([exec.signal, ledger.controller.signal]);
@@ -137,9 +137,19 @@ export function createNativeExecutionService(ctx, store, {
         check(ledger);
         const lock = (owner.dependencies ?? []).find(dependency => dependency.name === request?.name);
         if (!lock) throw new ExecutionFault('UNDECLARED_CAPABILITY_DEPENDENCY', 'dependency');
-        const bundle = await store.loadBundle(lock.name, { signal: ledger.signal });
-        if (!bundle || bundle.root.version !== lock.version) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
-        return executeProgram(bundle.root.execution, request.input, exec, ledger, bundle.root, [...path, identity]);
+        let definition = ledger.boundDefinitions.get(lock.name);
+        if (!definition) {
+          const bundle = await store.loadBundle(lock.name, { signal: ledger.signal });
+          if (!bundle || bundle.root.version !== lock.version) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
+          for (const entry of bundle.entries) {
+            const bound = ledger.boundDefinitions.get(entry.name);
+            if (bound && bound.revisionId !== entry.revisionId) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
+            ledger.boundDefinitions.set(entry.name, entry);
+          }
+          definition = bundle.root;
+        }
+        if (definition.version !== lock.version) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
+        return executeProgram(definition.execution, request.input, exec, ledger, definition, [...path, identity]);
       },
       reason: async request => {
         check(ledger);
@@ -177,7 +187,8 @@ export function createNativeExecutionService(ctx, store, {
     let ledger;
     try {
       if (disposed) throw new ExecutionFault('EXECUTION_SERVICE_DISPOSED', 'admission');
-      ledger = await newLedger(exec, options.resumeEvidence, options);
+      ledger = await newLedger(exec, options.resumeEvidence, { ...options, capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId } });
+      ledger.boundDefinitions = new Map((options.bundleEntries || [owner]).map(entry => [entry.name, entry]));
       active.add(ledger);
       const output = await executeProgram(execution, json(input ?? {}), exec, ledger, owner, []);
       // A program must await every host call. Returning while bindings remain
@@ -186,7 +197,7 @@ export function createNativeExecutionService(ctx, store, {
       if (ledger.pending.size) { ledger.controller.abort(); await Promise.allSettled([...ledger.pending]); throw new ExecutionFault('UNAWAITED_BINDINGS', 'program'); }
       // PTC owns process cleanup; full binding lifetimes are tracked above.
       await Promise.allSettled([...ledger.pending]);
-      const receipt = { runId: ledger.runId, status: 'completed', capability: { name: owner.name, version: owner.version, revisionId: owner.revisionId },
+      const receipt = { runId: ledger.runId, status: 'completed', capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId },
         implementations: ledger.implementations, steps: ledger.steps, relatedSessions: [...new Set(ledger.relatedSessions)], usage: ledger.usage,
         startedAt: ledger.startedAt, deadline: ledger.deadline, finishedAt: new Date().toISOString(), constraints, outputDigest: hash(output) };
       await ledger.event({ type: 'execution/end', status: 'completed', output, receipt });
@@ -222,12 +233,13 @@ export function createNativeExecutionService(ctx, store, {
       const receipt = JSON.parse(await readFile(join(directory, 'receipt.json'), 'utf8'));
       return { header, events, receipt };
     },
-    async run({ name, input, timeoutMs: remainingTimeout, deadline }, exec) {
+    async run({ name, input, expectedRevisionId, timeoutMs: remainingTimeout, deadline }, exec) {
       let bundle;
       try { bundle = await store.loadBundle(name, { signal: exec.signal }); }
       catch (error) { return { ok: false, failure: { code: 'CAPABILITY_LOAD_FAILED', category: 'internal', stage: 'dependency', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } }; }
       if (!bundle) return { ok: false, failure: { code: 'CAPABILITY_UNAVAILABLE', category: 'external', stage: 'admission', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } };
-      const result = await perform(bundle.root.execution, input, exec, bundle.root, { ...(remainingTimeout === undefined ? {} : { timeoutMs: remainingTimeout }), ...(deadline === undefined ? {} : { deadline }) });
+      if (expectedRevisionId !== undefined && bundle.root.revisionId !== expectedRevisionId) throw new Error('Capability version changed before execution; reopen it before executing');
+      const result = await perform(bundle.root.execution, input, exec, bundle.root, { bundleEntries: bundle.entries, ...(remainingTimeout === undefined ? {} : { timeoutMs: remainingTimeout }), ...(deadline === undefined ? {} : { deadline }) });
       return { ...result, entry: bundle.root };
     },
     runImplementation(execution, input, exec, options = {}) {

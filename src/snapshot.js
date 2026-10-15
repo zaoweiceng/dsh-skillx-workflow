@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 /** Convert logged messages and paired tool results, preserving reported evidence. */
-export function extractionSnapshot(sessionId, snapshot) {
+export function extractionSnapshot(sessionId, snapshot, { bounded = true } = {}) {
   const messages = [];
   const calls = new Map();
   const toolEvidence = [];
@@ -17,9 +17,10 @@ export function extractionSnapshot(sessionId, snapshot) {
       // DSH logs skill catalogs, loaded instructions and agent notices as user
       // messages too. They are context, not human requests or execution evidence.
       if (event.type === 'user/message' && message.source?.kind && message.source.kind !== 'user') continue;
-      const blocks = Array.isArray(message.content) ? message.content.filter(block => block.type !== 'reasoning') : message.content;
+      const blocks = Array.isArray(message.content) ? message.content.filter(block => block.type !== 'reasoning' && (bounded || block.type !== 'tool-call')) : message.content;
       const content = typeof blocks === 'string' ? blocks : blocks?.length ? JSON.stringify(blocks) : '';
-      if (content) messages.push({ role: event.type === 'user/message' ? 'user' : 'assistant', content });
+      if (content) messages.push({ role: event.type === 'user/message' ? 'user' : 'assistant', content,
+        ...(!bounded ? { sourceSeq: event.seq, sourceTime: event.time } : {}) });
     }
     if (event.type === 'tool/call') calls.set(data.callId, data);
     if (event.type === 'tool/result') {
@@ -41,7 +42,7 @@ export function extractionSnapshot(sessionId, snapshot) {
   }
   if (!messages.length) throw new Error('对话暂无可提取内容');
   const body = { sessionId, title: title.slice(0, 200), cwd, messages, toolEvidence };
-  if (messages.length > 500 || toolEvidence.length > 500 || messages.some(m => m.content.length > 65536) || Buffer.byteLength(JSON.stringify(body)) > 1048576) {
+  if (bounded && (messages.length > 500 || toolEvidence.length > 500 || messages.some(m => m.content.length > 65536) || Buffer.byteLength(JSON.stringify(body)) > 1048576)) {
     throw new Error('对话超过提取上限，请选择较短的对话；未截断或发送部分证据。');
   }
   return body;
@@ -49,7 +50,7 @@ export function extractionSnapshot(sessionId, snapshot) {
 
 /** Canonical evidence once, plus small measured indexes for comparison/discovery. */
 export function executionEvidence(sessionId, snapshot) {
-  const source = extractionSnapshot(sessionId, snapshot);
+  const source = extractionSnapshot(sessionId, snapshot, { bounded: false });
   const steps = new Map();
   const controls = [];
   const calls = new Map();
@@ -83,7 +84,11 @@ export function executionEvidence(sessionId, snapshot) {
     if (event.type === 'assistant/attempt') {
       // Failed-attempt accounting and errors matter; replaying private reasoning
       // into another author adds no execution evidence. Original logs stay intact.
-      controls.push({ ...event, data: { ...d, ...(Array.isArray(d.stream) ? { stream: d.stream.filter(record => !String(record.chunk?.type || '').startsWith('reasoning')) } : {}) } });
+      controls.push({ ...event, data: { ...d, ...(Array.isArray(d.stream) ? { stream: d.stream.filter(record => record.type !== 'reasoning-chunks' && record.chunk?.blockType !== 'reasoning' && record.chunk?.block?.type !== 'reasoning' && !String(record.chunk?.type || '').startsWith('reasoning')) } : {}) } });
+    } else if (event.type === 'user/message' && (d.message || d).source?.kind === 'skillx-workflow-execution') {
+      // Machine execution results are evidence, never a new human instruction.
+      const message = d.message || d;
+      controls.push({ seq: event.seq, time: event.time, type: 'capability/execution-result', data: { source: 'skillx-workflow-execution', content: message.content } });
     } else if (['turn/end', 'tool/ptc-dispatch'].includes(event.type)) controls.push(event);
   }
   source.incompleteCalls = [...calls.values()].filter(call => !completed.has(String(call.callId)));

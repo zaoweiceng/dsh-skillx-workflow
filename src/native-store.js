@@ -104,20 +104,25 @@ export function createStore({ dataRoot }) {
     }, { signal }));
     return bundles;
   };
-  const commitBatch = (inputs, { signal } = {}) => exclusive(async () => {
+  const commitBatch = (inputs, { signal, expectedRevisions = {} } = {}) => exclusive(async () => {
     signal?.throwIfAborted();
     if (!Array.isArray(inputs) || !inputs.length) throw new Error('A nonempty candidate batch is required');
     const rows = await catalog();
+    for (const [name, revisionId] of Object.entries(expectedRevisions)) {
+      assertName(name);
+      if (!revisionId || !Object.hasOwn(rows, name) || !rows[name].enabled || rows[name].revisionId !== revisionId) throw new Error('Referenced capability revision changed: ' + name);
+    }
     const names = new Set();
     const revisions = [];
     for (const input of inputs) {
-        const { name, description, content, sourceSessionId, generatorSessionId, operation, evidence, baseVersion } = input;
+        const { name, description, content, sourceSessionId, generatorSessionId, operation, evidence, baseVersion, baseRevisionId } = input;
         assertName(name);
         for (const [field, value] of Object.entries({ description, content, sourceSessionId, generatorSessionId })) required(value, field);
         const { dependencies, executionContent, execution, kind } = normalizeCandidate(input);
         if (!['extract', 'optimize'].includes(operation)) throw new Error('Invalid operation');
         if (evidence?.provider !== 'dsh' || evidence?.status !== 'completed' || evidence?.sessionId !== generatorSessionId) throw new Error('Current successful DSH generator evidence is required');
         const previous = Object.hasOwn(rows, name) ? rows[name] : undefined;
+        if (baseRevisionId !== undefined && baseRevisionId !== previous?.revisionId) throw new Error('Optimization base revision conflict');
         if (operation === 'extract' && previous) throw new Error('Capability already exists; use optimize with baseVersion');
         if (operation === 'optimize' && (!previous || baseVersion !== previous.version)) throw new Error('Optimization base version conflict');
         if (baseVersion !== undefined && baseVersion !== (previous?.version ?? 0)) throw new Error('Base version conflict');
@@ -148,7 +153,7 @@ export function createStore({ dataRoot }) {
       const rows = await catalog();
       return Object.values(rows).filter(row => (!kind || row.kind === kind) && (includeDisabled || row.enabled))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map(row => includeDisabled ? { name: row.name, description: row.description, kind: row.kind, enabled: row.enabled, version: row.version } : { name: row.name, description: row.description });
+        .map(row => includeDisabled ? { name: row.name, description: row.description, kind: row.kind, enabled: row.enabled, version: row.version, revisionId: row.revisionId } : { name: row.name, description: row.description });
     },
     async get(name, { includeDisabled = false } = {}) {
       assertName(name);
@@ -188,6 +193,26 @@ export function createStore({ dataRoot }) {
     },
     commit(input, options) { return commitBatch([input], options).then(rows => rows[0]); },
     commitBatch,
+    remove(name, { version, revisionId } = {}) {
+      return exclusive(async () => {
+        assertName(name);
+        const rows = await catalog();
+        if (!Object.hasOwn(rows, name)) return undefined;
+        if ((version !== undefined && version !== rows[name].version) || (revisionId !== undefined && revisionId !== rows[name].revisionId)) throw Object.assign(new Error('Capability changed; refresh before deleting'), { statusCode: 409, code: 'CAPABILITY_CHANGED' });
+        const dependents = [];
+        for (const row of Object.values(rows)) {
+          const entry = await readRevision(row);
+          if (entry.dependencies?.some(dependency => dependency.name === name)) dependents.push({ name: entry.name, kind: entry.kind, enabled: entry.enabled });
+        }
+        dependents.sort((a, b) => a.name.localeCompare(b.name));
+        if (dependents.length) throw Object.assign(new Error('Cannot delete: referenced by ' + dependents.map(entry => entry.name).join(', ')), { statusCode: 409, code: 'CAPABILITY_IN_USE', dependents });
+        const removed = rows[name];
+        delete rows[name];
+        // Keep immutable revisions for already loaded executions and audit history.
+        await publish(rows);
+        return { deleted: true, name: removed.name, version: removed.version };
+      });
+    },
     setEnabled(name, enabled) {
       return exclusive(async () => {
         assertName(name);
