@@ -17,6 +17,7 @@
     "README.md",
     "scripts/install.sh",
     "scripts/start.sh",
+    "scripts/repair-legacy-workbench-sessions.mjs",
     "docs"
   ],
   "scripts": {

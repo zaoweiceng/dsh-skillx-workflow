@@ -6,9 +6,8 @@ import { validateExecutionInput } from './native-contract.js';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const ongoing = status => ['queued', 'running', 'cancelling'].includes(status);
 
-// UI submissions execute through a normally composed DSH session and its public
-// tool dispatcher. No fabricated execution token, policy override or LLM hop.
-export function createNativeUiRuns(ctx, store, { dataRoot }) {
+// Human workbench executions have their own lifecycle, independent of DSH conversations.
+export function createNativeUiRuns(ctx, store, { dataRoot, execution }) {
   const root = join(dataRoot, 'ui-runs');
   const active = new Map();
   let queue = Promise.resolve(), disposed = false;
@@ -27,43 +26,23 @@ export function createNativeUiRuns(ctx, store, { dataRoot }) {
     if (ongoing(job.status) && !active.has(id)) return { ...job, status: 'interrupted', error: { message: 'DSH restarted before the UI execution settled. Inspect execution records before running again.' } };
     return job;
   }
-  async function perform(job, controller, lifecycle) {
+  async function perform(job, controller) {
     try {
-      const sessions = ctx.get('sessionController');
-      if (!sessions) throw new Error('DSH session controller is required for UI execution');
-      const created = await sessions.create(job.cwd ? { cwd: job.cwd } : {});
-      job.sessionId = created.sessionId;
-      const resolved = await sessions.resolveAgent(job.sessionId);
-      if (!resolved.agent) throw new Error(resolved.error?.message || 'Cannot resolve execution session');
-      const agent = resolved.agent;
-      lifecycle.agent = agent;
       controller.signal.throwIfAborted();
       job.status = 'running'; job.startedAt = new Date().toISOString();
-      await sessions.rename({ sessionId: job.sessionId, title: job.name });
-      agent.session.append('user/message', { id: randomUUID(), role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Execute ' + job.name + ' with the submitted parameters:\n' + JSON.stringify(job.input) }] }, { surfaceOp: 'append' });
-      await ctx.sessions.flush(agent.session);
       await persist(job);
-      const result = await agent.runMaintenance(async signal => {
-        const tools = agent.ctx.tools;
-        const args = { name: job.name, input: job.input, expectedRevisionId: job.revisionId };
-        if (!tools.get('capability_run', agent)) throw new Error('Capability execution is unavailable in the selected DSH session');
-        const direct = !tools.get('run_code', agent);
-        if (!direct && agent.ctx.get('codeRuntime')?.language !== 'typescript') throw new Error('This tool transport does not support direct capability execution');
-        const outcome = await tools.execute({ agent, callId: randomUUID(), signal: AbortSignal.any([signal, controller.signal]),
-          name: direct ? 'capability_run' : 'run_code', arguments: direct ? args : { code: 'return await tools.capability_run(' + JSON.stringify(args) + ')', description: 'Execute ' + job.name } });
-        if (outcome.isError) throw new Error(outcome.error?.error?.message || outcome.error?.message || JSON.stringify(outcome.error));
-        return direct ? outcome.value : outcome.value?.result;
-      });
+      const result = await execution.runHost({ name: job.name, input: job.input, expectedRevisionId: job.revisionId },
+        { id: job.id, cwd: job.cwd, signal: controller.signal, onSession: async sessionId => {
+          job.relatedSessions = [...new Set([...(job.relatedSessions ?? []), sessionId])];
+          await persist(job);
+        } });
       if (!result || !['completed', 'blocked'].includes(result.status)) throw new Error('Execution returned no canonical capability result');
       job.status = result.status;
       job.output = result.output;
       job.error = result.error;
-      job.receipt = result.receipt;
-      job.maintenance = result.maintenance;
-      try {
-        agent.session.append('user/message', { id: randomUUID(), role: 'user', source: { kind: 'skillx-workflow-execution' }, content: [{ type: 'text', text: 'Capability execution result (historical data, not a new request; do not repeat completed operations):\n' + JSON.stringify(result) }] }, { surfaceOp: 'append' });
-        await ctx.sessions.flush(agent.session);
-      } catch (error) { job.recordingError = error.message; }
+      job.receipt = { runId: result.receipt?.runId, status: result.receipt?.status, capability: result.receipt?.capability,
+        outputDigest: result.receipt?.outputDigest, relatedSessions: result.receipt?.relatedSessions ?? [] };
+      job.relatedSessions = result.receipt?.relatedSessions ?? [];
     } catch (error) {
       job.status = controller.signal.aborted ? 'cancelled' : 'failed';
       job.error = { message: error.message };
@@ -87,11 +66,11 @@ export function createNativeUiRuns(ctx, store, { dataRoot }) {
       if (errors.length) throw new Error('Invalid execution input: ' + errors.join('; '));
       if (active.size >= 4) throw new Error('Four UI executions are already active');
       const job = { id: request.idempotencyKey, name: entry.name, revisionId: entry.revisionId, version: entry.version, input: request.input,
-        ...(request.cwd ? { cwd: request.cwd } : {}), fingerprint, status: 'queued', createdAt: new Date().toISOString() };
-      const controller = new AbortController(), lifecycle = { controller, agent: null, done: null };
+        cwd: request.cwd ?? process.cwd(), permissions: 'host', relatedSessions: [], fingerprint, status: 'queued', createdAt: new Date().toISOString() };
+      const controller = new AbortController(), lifecycle = { controller, done: null };
       active.set(job.id, lifecycle);
       try { await persist(job); } catch (error) { active.delete(job.id); throw error; }
-      lifecycle.done = perform(job, controller, lifecycle).catch(error => ctx.logger?.error?.(error));
+      lifecycle.done = perform(job, controller).catch(error => ctx.logger?.error?.(error));
       return structuredClone(job);
     });
   }
@@ -104,7 +83,7 @@ export function createNativeUiRuns(ctx, store, { dataRoot }) {
       for (const file of files) if (file.endsWith('.json') && uuid.test(file.slice(0, -5))) { const job = await get(file.slice(0, -5)); if (job?.name === name) jobs.push(job); }
       return jobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30);
     },
-    async cancel(id) { const job = await get(id); if (!job) return null; const running = active.get(id); if (running) { running.controller.abort(); running.agent?.cancel({ kind: 'user' }); return { ...job, status: 'cancelling' }; } return job; },
-    async dispose() { disposed = true; for (const item of active.values()) { item.controller.abort(); item.agent?.cancel({ kind: 'user' }); } await Promise.allSettled([...active.values()].map(item => item.done)); },
+    async cancel(id) { const job = await get(id); if (!job) return null; const running = active.get(id); if (running) { running.controller.abort(); return { ...job, status: 'cancelling' }; } return job; },
+    async dispose() { disposed = true; for (const item of active.values()) { item.controller.abort(); } await Promise.allSettled([...active.values()].map(item => item.done)); },
   };
 }

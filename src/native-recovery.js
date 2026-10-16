@@ -54,32 +54,39 @@ export function createNativeRecoveryService(ctx, { store, learningService, dataR
     await rename(temporary, join(dir, `${id}.json`));
   };
   async function run({ prompt, outputSchema, input, entry, failure, trace, receipt, deadline, readOnly = false, independent = false, delegation }, exec, options = {}) {
-    if (!exec?.agent || !exec.signal) throw new Error('Native recovery requires the owning Agent and execution signal');
+    const hostContext = options.hostContext;
+    if ((!exec?.agent && !(hostContext && readOnly)) || !exec.signal) throw new Error('Native recovery requires an execution owner and signal');
+    if (hostContext) independent = true;
     const cutoff = deadline ?? options.deadline ?? exec.deadline;
     const remaining = cutoff === undefined ? timeoutMs : Math.min(timeoutMs, Number(cutoff) - Date.now());
     if (!Number.isFinite(remaining) || remaining <= 0) return { outcome: 'unresolved', category: 'budget', reason: 'RECOVERY_DEADLINE_EXCEEDED', relatedSessions: [], usage: [], usageComplete: false };
     assertSupportedJsonSchema(outputSchema);
     const parent = exec.agent;
-    const inherited = delegation?.policy ?? captureDelegatedPolicyOverrides(parent);
-    const depth = delegation?.depth ?? resolveChildDepth(parent, 4);
-    const callConfig = delegation?.callConfig ?? inheritedCallConfig(parent);
+    const inherited = hostContext ? undefined : delegation?.policy ?? captureDelegatedPolicyOverrides(parent);
+    const depth = hostContext ? 0 : delegation?.depth ?? resolveChildDepth(parent, 4);
+    const callConfig = hostContext ? undefined : delegation?.callConfig ?? inheritedCallConfig(parent);
     const sessionId = randomUUID();
     const relatedSessions = [sessionId];
     if (receipt) receipt.relatedSessions = [...new Set([...(receipt.relatedSessions || []), sessionId])];
-    const record = { sessionId, parentSessionId: delegation?.parentSessionId ?? parent.session.id ?? parent.session.header?.id, kind: readOnly ? 'reasoning' : 'recovery', startedAt: new Date().toISOString(), status: 'running', relatedSessions };
+    const record = { sessionId, ...(hostContext ? { executionContextId: hostContext.id }
+      : { parentSessionId: delegation?.parentSessionId ?? parent.session.id ?? parent.session.header?.id }), kind: readOnly ? 'reasoning' : 'recovery', startedAt: new Date().toISOString(), status: 'running', relatedSessions };
     await persist(sessionId, record);
     const controller = new AbortController();
     const signal = AbortSignal.any([exec.signal, controller.signal, ...(options.signal ? [options.signal] : [])]);
     let handle; let submitted; let steps = 0; let limited = false; const evidencePageReceipts = new Map();
-    const evidencePages = independent ? paginateRecoveryEvidence(structuredClone({ trace, input, failure: failure ?? null, capability: entry ? { name: entry.name, version: entry.version, execution: entry.execution, dependencies: entry.dependencies ?? [] } : null })) : undefined;
+    const evidencePages = independent && !hostContext ? paginateRecoveryEvidence(structuredClone({ trace, input, failure: failure ?? null, capability: entry ? { name: entry.name, version: entry.version, execution: entry.execution, dependencies: entry.dependencies ?? [] } : null })) : undefined;
     const timer = setTimeout(() => { limited = true; controller.abort(); }, remaining); timer.unref?.();
     const abort = () => handle?.agent.cancel({ kind: 'parent' });
     signal.addEventListener('abort', abort, { once: true });
     try {
       handle = await (independent ? ctx : parent.ctx).agents.create({ sessionId, ...(independent ? {} : { parentAgent: parent }),
-        meta: delegation?.meta ?? childSessionMeta(parent, depth, false), agentOptions: delegation?.agentOptions ?? resolveChildAgentOptions(parent, undefined, depth), signal,
+        meta: hostContext ? { agentPreset: 'standard', cwd: hostContext.cwd } : delegation?.meta ?? childSessionMeta(parent, depth, false),
+        ...(hostContext ? {} : { agentOptions: delegation?.agentOptions ?? resolveChildAgentOptions(parent, undefined, depth) }), signal,
         setup: (childCtx, child) => {
-          appendDelegatedPolicyOverrides(child.session, inherited);
+          if (hostContext) {
+            child.session.append('sandbox/mode', { mode: 'danger-full-access' });
+            child.session.append('approval/policy', { policy: 'never' });
+          } else appendDelegatedPolicyOverrides(child.session, inherited);
           // AgentOptions alone omits sampling/stop and may retain an older
           // creation-time maxTokens. Inherit the current logged request scalars.
           if (callConfig) childCtx.on('agent/request', async (_event, next) => { await next(); return structuredClone(callConfig); }, { prepend: true });
@@ -96,7 +103,7 @@ export function createNativeRecoveryService(ctx, { store, learningService, dataR
             return { ...assembled, tools: assembled.tools.filter(tool => readOnly ? [SUBMIT, ...(independent ? [READ_EVIDENCE] : [])].includes(tool.name) : !blockedTools.has(tool.name) && !tool.name.startsWith('capability_run')) };
           }, { prepend: true });
           childCtx.on('agent/pre-step', async (_event, next) => { if (++steps > maxSteps) { limited = true; return { kind: 'reject' }; } return next(); });
-          if (independent) childCtx.tools.register(defineTool({ name: READ_EVIDENCE,
+          if (evidencePages) childCtx.tools.register(defineTool({ name: READ_EVIDENCE,
             description: 'Read every page of immutable recovery evidence before submitting. Concatenate data in page order and JSON.parse it to reconstruct the exact original JSON; sha256 verifies the complete UTF-8 string. Pages are bounded below the host spill limit. Repeated pages return a reference, not duplicate data.',
             parameters: { page: { type: 'integer', description: 'Zero-based page index. Start at 0, then read all indexes below totalPages.' } }, output: { schema: { type: 'object', properties: {}, additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
             isConcurrencySafe: () => true,
@@ -121,7 +128,7 @@ export function createNativeRecoveryService(ctx, { store, learningService, dataR
             execute: async value => {
               signal.throwIfAborted();
               if (submitted) throw new Error('Recovery already submitted');
-              if (independent && evidencePageReceipts.size !== evidencePages.pages.length) throw new Error('Read every recovery evidence page before submitting diagnosis');
+              if (evidencePages && evidencePageReceipts.size !== evidencePages.pages.length) throw new Error('Read every recovery evidence page before submitting diagnosis');
               if (value.outcome === 'completed') {
                 const errors = entry && !readOnly ? validateExecutionOutput(entry.execution, value.output) : validateJsonSchemaValue(outputSchema, value.output);
                 if (errors.length) {
@@ -142,7 +149,8 @@ export function createNativeRecoveryService(ctx, { store, learningService, dataR
         },
       });
       signal.throwIfAborted();
-      const promptEvidence = independent
+      await options.onSession?.(sessionId);
+      const promptEvidence = evidencePages
         ? { prompt, outputSchema, capability: entry ? { name: entry.name, version: entry.version } : undefined,
           evidenceAccess: 'Call read_recovery_evidence with page 0, inspect totalPages, then retrieve every remaining page before submitting. Concatenate data in page order and JSON.parse to obtain the exact complete evidence. Independent page reads may be batched. Repeated page reads return references only.' }
         : { prompt, input, ...(entry ? { capability: { name: entry.name, version: entry.version, execution: entry.execution, dependencies: entry.dependencies }, failure, trace } : {}), outputSchema };

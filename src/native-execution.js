@@ -2,6 +2,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, appendFile, writeFile, readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { normalizeExecution, validateExecutionInput, validateExecutionOutput } from './native-contract.js';
+import { createHostExecutionContext } from './host-execution-context.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { sandboxDenied, nativeRetryMode, nativeApprovalOutcome } from './native-tool-approval.js';
 
 const json = value => JSON.parse(JSON.stringify(value));
 const hash = value => 'sha256:' + createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -13,7 +16,7 @@ class ExecutionFault extends Error {
 const constraints = {
   isolation: 'DSH native PTC process',
   directIO: 'Official Node PTC permits Node APIs. Direct I/O follows the resolved session sandbox; this receipt covers native tool dispatches, not every possible program effect.',
-  authority: 'Native tool dispatches retain the original calling Agent, root call and execution token. No policy widening is requested.',
+  authority: 'Native tool dispatches retain the calling Agent, root call and execution token. A safely retryable sandbox refusal may request native approval for one exact operation; standing session permissions are unchanged.',
 };
 
 /** Programs are DSH-authored data executed only by the host's public PTC service. */
@@ -24,11 +27,17 @@ export function createNativeExecutionService(ctx, store, {
   for (const [key, value] of Object.entries({ timeoutMs, maxCalls, maxDepth, maxOutputBytes })) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Invalid execution bound: ' + key);
   const tracesRoot = join(dataRoot, 'executions');
   const active = new Set();
+  const hostExecutions = new WeakMap();
+  const hostScope = createHostExecutionContext(ctx);
+  const hostEntry = new AsyncLocalStorage();
   let disposed = false;
   const services = () => ({ ptc: ctx.get?.('ptcRuntime') ?? ctx.ptcRuntime, policy: ctx.get?.('sandboxPolicy') ?? ctx.sandboxPolicy });
   const authority = exec => {
-    if (!exec?.agent?.session || !exec.token || !exec.rootCallId || !exec.signal) throw new ExecutionFault('CALLER_AUTHORITY_REQUIRED', 'admission');
+    if ((!exec?.agent?.session && !hostExecutions.has(exec)) || !exec.token || !exec.rootCallId || !exec.signal) throw new ExecutionFault('CALLER_AUTHORITY_REQUIRED', 'admission');
   };
+  const contextOf = exec => hostExecutions.get(exec);
+  const constraintsOf = exec => contextOf(exec) ? { ...constraints,
+    authority: 'Human workbench execution uses host process permissions, without a DSH conversation or session sandbox.' } : constraints;
   async function newLedger(exec, resumeEvidence, options = {}) {
     authority(exec);
     await mkdir(tracesRoot, { recursive: true, mode: 0o700 });
@@ -39,8 +48,10 @@ export function createNativeExecutionService(ctx, store, {
     if (!Number.isFinite(deadline) || deadline <= Date.now()) throw new ExecutionFault('EXECUTION_TIMEOUT', 'admission', 'unknown');
     const runId = randomUUID(); const directory = join(tracesRoot, runId);
     await mkdir(directory, { mode: 0o700 });
-    const header = { runId, sessionId: exec.agent.session.header.id, rootCallId: exec.rootCallId,
-      startedAt: new Date().toISOString(), deadline, capability: options.capability, constraints };
+    const host = contextOf(exec);
+    const header = { runId, ...(host ? { executionContext: { kind: 'workbench', id: host.id, cwd: host.cwd, permissions: 'host' } }
+      : { sessionId: exec.agent.session.header.id }), rootCallId: exec.rootCallId,
+      startedAt: new Date().toISOString(), deadline, capability: options.capability, constraints: constraintsOf(exec) };
     const ledger = { ...header, directory, steps: [], implementations: [], relatedSessions: [], usage: [], reuse: new Map(), count: 0,
       controller: new AbortController(), pending: new Set(), toolTail: Promise.resolve(), logTail: Promise.resolve(), nativeFailures: [] };
     ledger.signal = AbortSignal.any([exec.signal, ledger.controller.signal]);
@@ -56,7 +67,7 @@ export function createNativeExecutionService(ctx, store, {
         if (typeof priorRunId !== 'string' || !/^[a-f0-9-]{36}$/.test(priorRunId)) throw new ExecutionFault('INVALID_RESUME_REFERENCE', 'admission');
         const prior = join(tracesRoot, priorRunId);
         const priorHeader = JSON.parse(await readFile(join(prior, 'header.json'), 'utf8'));
-        if (priorHeader.sessionId !== header.sessionId || priorHeader.rootCallId !== header.rootCallId) throw new ExecutionFault('RESUME_AUTHORITY_MISMATCH', 'admission');
+        if (priorHeader.sessionId !== header.sessionId || priorHeader.executionContext?.id !== header.executionContext?.id || priorHeader.rootCallId !== header.rootCallId) throw new ExecutionFault('RESUME_AUTHORITY_MISMATCH', 'admission');
         const events = (await readFile(join(prior, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
         for (const item of events) if (item.type === 'dispatch/end' && item.status === 'succeeded' && item.reusable === true) ledger.reuse.set(item.stepId, item);
         ledger.relatedSessions.push(...(JSON.parse(await readFile(join(prior, 'receipt.json'), 'utf8'))).relatedSessions ?? []);
@@ -66,6 +77,7 @@ export function createNativeExecutionService(ctx, store, {
     return ledger;
   }
   const check = ledger => {
+    if (ledger.authorizationFailure) throw ledger.authorizationFailure;
     ledger.signal.throwIfAborted();
     if (++ledger.count > maxCalls) throw new ExecutionFault('EXECUTION_CALL_LIMIT', 'dispatch');
   };
@@ -79,10 +91,56 @@ export function createNativeExecutionService(ctx, store, {
     ledger.steps.push(step);
     const args = json(request.arguments ?? {});
     await ledger.event({ type: 'dispatch/start', ...step, arguments: args });
-    const execute = async () => {
+    const dispatch = async (arguments_, identity) => {
       ledger.signal.throwIfAborted();
-      return ctx.tools.execute({ name: request.name, arguments: args, agent: exec.agent, parent: exec.token,
-        rootCallId: exec.rootCallId, callId, signal: ledger.signal });
+      const invoke = () => ctx.tools.execute({ name: request.name, arguments: arguments_, ...(exec.agent ? { agent: exec.agent } : {}), parent: exec.token,
+        rootCallId: exec.rootCallId, callId: identity, signal: ledger.signal });
+      const host = contextOf(exec);
+      return host ? hostScope.run(host, invoke) : invoke();
+    };
+    const authorizationFailure = async (identity, detail) => {
+      const fault = new ExecutionFault(identity, 'authorization', 'external', detail);
+      ledger.authorizationFailure = fault;
+      await ledger.event({ type: 'authorization/blocked', stepId, code: identity, detail });
+      throw fault;
+    };
+    const outcomeCode = outcome => ({ rejected: 'APPROVAL_DENIED', cancelled: 'APPROVAL_CANCELLED', unavailable: 'APPROVAL_UNAVAILABLE' })[outcome] ?? 'APPROVAL_UNAVAILABLE';
+    const execute = async () => {
+      if (ledger.authorizationFailure) throw ledger.authorizationFailure;
+      const session = exec.agent?.session;
+      const since = session?.seq;
+      const initial = await dispatch(args, callId);
+      if (!session || contextOf(exec)) return initial;
+      if (!initial.isError && !sandboxDenied(initial)) return initial;
+      const initialApproval = nativeApprovalOutcome(session, callId, since);
+      if (initialApproval && initialApproval !== 'allowed-once') return authorizationFailure(outcomeCode(initialApproval), 'The native authorization was not granted; the operation was not retried.');
+      if (!sandboxDenied(initial)) return initial;
+      await ledger.event({ type: 'dispatch/attempt', stepId, attempt: 1, callId, status: 'sandbox-denied',
+        value: initial.value, error: initial.error, content: initial.content, reusable: false });
+      let mode;
+      try { mode = await nativeRetryMode(ctx, request.name, args, initial, exec.agent, ledger.signal); }
+      catch { return authorizationFailure('SANDBOX_RETRY_UNSAFE', 'Cannot determine a safe one-operation permission retry.'); }
+      if (!mode) return authorizationFailure('SANDBOX_RETRY_UNSAFE', 'The denied operation may have partially executed or does not support a native one-operation grant; do not replay it.');
+      check(ledger);
+      const retryCallId = callId + ':approval-retry';
+      const retryArgs = { ...args, sandbox_permissions: mode,
+        justification: 'SkillX「' + owner.name + '」的操作被沙箱拒绝，是否仅授权本次原样重试？操作：' + (args.command ?? args.file_path ?? request.name) };
+      await ledger.event({ type: 'authorization/retry', stepId, callId: retryCallId, mode, arguments: retryArgs });
+      const retrySince = session.seq;
+      // The native tool requests approval before performing this retry. Keep
+      // the entire wait and retry in the original serialized tool slot: the
+      // capability program is suspended, never restarted.
+      let retried;
+      try { retried = await dispatch(retryArgs, retryCallId); }
+      catch { return authorizationFailure(ledger.signal.aborted ? 'APPROVAL_CANCELLED' : 'APPROVAL_UNAVAILABLE',
+        'The permission retry could not settle; retain its evidence and do not replay completed operations.'); }
+      const outcome = nativeApprovalOutcome(session, retryCallId, retrySince);
+      await ledger.event({ type: 'dispatch/attempt', stepId, attempt: 2, callId: retryCallId,
+        approvalOutcome: outcome ?? 'unavailable', value: retried.value, error: retried.error, content: retried.content, reusable: false });
+      if (outcome !== 'allowed-once') return authorizationFailure(outcomeCode(outcome), 'Native approval did not grant the retry; stop without replaying completed steps.');
+      if (sandboxDenied(retried)) return authorizationFailure('SANDBOX_DENIED_AFTER_APPROVAL', 'The one-operation grant did not resolve the denial; no further retry was attempted.');
+      step.approvalRetry = { callId: retryCallId, mode, outcome };
+      return retried;
     };
     // Serialize native dispatches conservatively: generated Promise.all must not
     // overlap effects whose tool contract classifies them as exclusive.
@@ -93,6 +151,7 @@ export function createNativeExecutionService(ctx, store, {
     catch (error) {
       step.status = 'failed'; step.finishedAt = new Date().toISOString(); step.code = code(error.code);
       await ledger.event({ type: 'dispatch/end', ...step, error: { name: error.name, message: error.message } });
+      if (error instanceof ExecutionFault) throw error;
       throw new ExecutionFault(step.code, 'native-tool', categories[step.code] ?? 'unknown');
     }
     step.finishedAt = new Date().toISOString();
@@ -156,7 +215,12 @@ export function createNativeExecutionService(ctx, store, {
         if (typeof reason !== 'function') throw new ExecutionFault('NATIVE_REASONING_UNAVAILABLE', 'reasoning');
         await ledger.event({ type: 'reasoning/start', owner: owner.name, request });
         let result;
-        try { result = await track(ledger, reason(request, exec, { signal: ledger.signal, runId: ledger.runId, deadline: ledger.deadline })); }
+        try { result = await track(ledger, reason(request, exec, { signal: ledger.signal, runId: ledger.runId, deadline: ledger.deadline,
+          ...(contextOf(exec) ? { hostContext: { id: contextOf(exec).id, cwd: contextOf(exec).cwd }, onSession: async sessionId => {
+            ledger.relatedSessions.push(sessionId);
+            await ledger.event({ type: 'reasoning/session', owner: owner.name, sessionId });
+            await contextOf(exec).onSession?.(sessionId);
+          } } : {}) })); }
         catch (error) {
           if (Array.isArray(error.relatedSessions)) ledger.relatedSessions.push(...error.relatedSessions);
           if (Array.isArray(error.usage)) ledger.usage.push(...error.usage);
@@ -172,11 +236,13 @@ export function createNativeExecutionService(ctx, store, {
     };
     const functions = Object.fromEntries(Object.entries(bindings).map(([name, fn]) => [name, request => track(ledger, Promise.resolve().then(() => fn(request)))]));
     const program = `const input = await __native_capability.input({});\nconst tools = Object.freeze({call: request => __native_capability.tool(request), reuse: request => __native_capability.reuse(request)});\nconst capabilities = Object.freeze({run: request => __native_capability.capability(request), reason: request => __native_capability.reason(request)});\n${contract.program}`;
-    const sandboxPolicy = policy.resolve({ session: exec.agent.session });
+    const host = contextOf(exec);
+    const sandboxPolicy = host ? { mode: 'danger-full-access', workspaceRoot: host.cwd } : policy.resolve({ session: exec.agent.session });
     const spec = ptc.resolve({ program, bindings: [{ global: '__native_capability', functions }],
-      cwd: exec.agent.session.header.cwd, signal: ledger.signal, sandboxPolicy, timeoutMs: Math.max(1, ledger.deadline - Date.now()) });
+      cwd: host?.cwd ?? exec.agent.session.header.cwd, signal: ledger.signal, sandboxPolicy, timeoutMs: Math.max(1, ledger.deadline - Date.now()) });
     const result = await track(ledger, ptc.run(spec));
     await ledger.event({ type: 'implementation/end', implementationId, sandbox: result.sandbox, logs: result.logs, error: result.error, ...(result.error ? {} : { value: result.value }) });
+    if (ledger.authorizationFailure) throw ledger.authorizationFailure;
     if (result.error) throw new ExecutionFault('PROGRAM_' + result.error.kind.replaceAll('-', '_').toUpperCase(), 'program', ledger.nativeFailures.length ? 'unknown' : 'internal', result.error);
     const outputErrors = validateExecutionOutput(contract, result.value);
     if (outputErrors.length) throw new ExecutionFault('OUTPUT_SCHEMA_INVALID', 'output', 'internal', outputErrors);
@@ -199,7 +265,7 @@ export function createNativeExecutionService(ctx, store, {
       await Promise.allSettled([...ledger.pending]);
       const receipt = { runId: ledger.runId, status: 'completed', capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId },
         implementations: ledger.implementations, steps: ledger.steps, relatedSessions: [...new Set(ledger.relatedSessions)], usage: ledger.usage,
-        startedAt: ledger.startedAt, deadline: ledger.deadline, finishedAt: new Date().toISOString(), constraints, outputDigest: hash(output) };
+        startedAt: ledger.startedAt, deadline: ledger.deadline, finishedAt: new Date().toISOString(), constraints: constraintsOf(exec), outputDigest: hash(output) };
       await ledger.event({ type: 'execution/end', status: 'completed', output, receipt });
       await writeFile(join(ledger.directory, 'receipt.json'), JSON.stringify(receipt, null, 2), { mode: 0o600 });
       await ledger.logTail;
@@ -207,14 +273,19 @@ export function createNativeExecutionService(ctx, store, {
     } catch (error) {
       ledger?.controller.abort();
       if (ledger) await Promise.allSettled([...ledger.pending]);
-      const failure = { code: ledger?.timedOut ? 'EXECUTION_TIMEOUT' : code(error.code), category: ledger?.timedOut ? 'unknown' : error.category ?? 'unknown', stage: error.stage ?? 'infrastructure', retryable: false,
+      // Cancellation may settle the PTC process before the native approval
+      // decision is logged. Drain the binding first and retain that decision,
+      // rather than sending a declined/cancelled operation into model repair.
+      const failed = ledger?.authorizationFailure ?? error;
+      const timedOut = ledger?.timedOut && !ledger.authorizationFailure;
+      const failure = { code: timedOut ? 'EXECUTION_TIMEOUT' : code(failed.code), category: timedOut ? 'unknown' : failed.category ?? 'unknown', stage: failed.stage ?? 'infrastructure', retryable: false,
         ...(ledger?.nativeFailures.length ? { observedNativeFailures: ledger.nativeFailures.slice(-8) } : {}) };
       const receipt = { ...(ledger ? { runId: ledger.runId, startedAt: ledger.startedAt, deadline: ledger.deadline } : {}), status: 'failed',
         capability: { name: owner.name, version: owner.version, revisionId: owner.revisionId }, steps: ledger?.steps ?? [],
-        relatedSessions: [...new Set(ledger?.relatedSessions ?? [])], usage: ledger?.usage ?? [], finishedAt: new Date().toISOString(), constraints };
+        relatedSessions: [...new Set(ledger?.relatedSessions ?? [])], usage: ledger?.usage ?? [], finishedAt: new Date().toISOString(), constraints: constraintsOf(exec) };
       if (ledger) {
         try {
-          await ledger.event({ type: 'execution/end', status: 'failed', failure, diagnostic: { name: error.name, message: error.message, detail: error.detail }, receipt });
+          await ledger.event({ type: 'execution/end', status: 'failed', failure, diagnostic: { name: failed.name, message: failed.message, detail: failed.detail }, receipt });
           await writeFile(join(ledger.directory, 'receipt.json'), JSON.stringify(receipt, null, 2), { mode: 0o600 });
           await ledger.logTail;
         } catch { failure.traceUnavailable = true; }
@@ -222,13 +293,28 @@ export function createNativeExecutionService(ctx, store, {
       return { ok: false, failure, receipt, ...(ledger ? { traceRef: ledger.runId } : {}) };
     } finally { if (ledger) { clearTimeout(ledger.timer); ledger.controller.abort(); active.delete(ledger); } }
   }
-  return {
+  const service = {
+    isHostCall(exec) {
+      const host = hostEntry.getStore();
+      return !!host && !exec.agent && exec.rootCallId === host.id && exec.name === 'capability_run';
+    },
+    async runHostCall(request, exec) {
+      if (!service.isHostCall(exec)) throw new ExecutionFault('HOST_AUTHORITY_REQUIRED', 'admission');
+      const host = hostEntry.getStore();
+      hostExecutions.set(exec, host);
+      try {
+        const result = await service.run({ ...request, timeoutMs: 600000 }, exec);
+        const receipt = json(result.receipt);
+        return result.ok ? { status: 'completed', output: result.output, receipt }
+          : { status: 'blocked', error: { ...result.failure, message: 'Execution failed; inspect the retained execution record before retrying.' }, receipt };
+      } finally { hostExecutions.delete(exec); }
+    },
     async readTrace(runId, exec) {
       authority(exec);
       if (typeof runId !== 'string' || !/^[a-f0-9-]{36}$/.test(runId)) throw new ExecutionFault('INVALID_TRACE_REFERENCE', 'trace');
       const directory = join(tracesRoot, runId);
       const header = JSON.parse(await readFile(join(directory, 'header.json'), 'utf8'));
-      if (header.sessionId !== exec.agent.session.header.id || header.rootCallId !== exec.rootCallId) throw new ExecutionFault('TRACE_AUTHORITY_MISMATCH', 'trace');
+      if (header.sessionId !== exec.agent?.session.header.id || header.executionContext?.id !== contextOf(exec)?.id || header.rootCallId !== exec.rootCallId) throw new ExecutionFault('TRACE_AUTHORITY_MISMATCH', 'trace');
       const events = (await readFile(join(directory, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
       const receipt = JSON.parse(await readFile(join(directory, 'receipt.json'), 'utf8'));
       return { header, events, receipt };
@@ -246,6 +332,27 @@ export function createNativeExecutionService(ctx, store, {
       return perform(execution, input, exec, { name: options.name ?? 'recovery-implementation', version: options.version,
         revisionId: options.revisionId, dependencies: options.dependencies ?? [] }, options);
     },
-    async dispose() { disposed = true; for (const ledger of active) ledger.controller.abort(); await Promise.allSettled([...active].flatMap(ledger => [...ledger.pending])); },
+    async runHost(request, { id, cwd = process.cwd(), signal, onSession }) {
+      if (disposed) throw new Error('Execution service disposed');
+      // Use the public native dispatcher to mint tokens and retain hooks. PTC
+      // presentation needs its programmatic transport, never a model or session.
+      const presets = ctx.get('agentPresets');
+      if (!presets?.acquireScope) throw new Error('Host execution requires the native tool composition registry');
+      const lease = await presets.acquireScope('standard');
+      try {
+        const host = { id, cwd, onSession, observations: new Map(), toolScope: lease.key };
+        return await hostEntry.run(host, () => hostScope.run(host, async () => {
+          const direct = !ctx.tools.get('run_code');
+          if (!direct && ctx.get('ptcRuntime')?.language !== 'typescript') throw new Error('Host execution requires the TypeScript PTC transport');
+          const outcome = await ctx.tools.execute({ callId: id, signal,
+            name: direct ? 'capability_run' : 'run_code', arguments: direct ? request
+              : { code: 'return await tools.capability_run(' + JSON.stringify(request) + ')', description: 'Execute ' + request.name, timeoutMs: 600000 } });
+          if (outcome.isError) throw new Error(outcome.error?.message || 'Host execution dispatch failed');
+          return direct ? outcome.value : outcome.value?.result;
+        }));
+      } finally { await lease[Symbol.asyncDispose](); }
+    },
+    async dispose() { disposed = true; for (const ledger of active) ledger.controller.abort(); await Promise.allSettled([...active].flatMap(ledger => [...ledger.pending])); hostScope.dispose(); hostEntry.disable(); },
   };
+  return service;
 }

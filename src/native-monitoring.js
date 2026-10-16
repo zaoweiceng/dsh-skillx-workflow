@@ -55,7 +55,7 @@ export function createNativeMonitoring({ dataRoot, store, learningService, sessi
         if (!kind && uuid.test(capability.revisionId)) kind = (await json(join(dataRoot, 'revisions', capability.revisionId + '.json')))?.kind;
         kind ??= catalog.get(capability.name);
         rows.push({ id: entry.name, type: 'execution', name: capability?.name ?? '—', kind, createdAt,
-          revisionId: capability.revisionId, sessionId: header.sessionId, status: receipt?.status ?? 'unfinished', tokens: tokensOf(receipt?.usage), usageComplete: receipt?.usageComplete === true, durationMs: receipt?.finishedAt ? Math.max(0, Date.parse(receipt.finishedAt) - time) : null });
+          revisionId: capability.revisionId, sessionId: header.sessionId ?? receipt?.relatedSessions?.[0], executionContext: header.executionContext, status: receipt?.status ?? 'unfinished', tokens: tokensOf(receipt?.usage), usageComplete: receipt?.usageComplete === true, durationMs: receipt?.finishedAt ? Math.max(0, Date.parse(receipt.finishedAt) - time) : null });
       } catch { warnings.push(entry.name); }
     }
     for (const entry of await entries(join(dataRoot, 'jobs'))) {

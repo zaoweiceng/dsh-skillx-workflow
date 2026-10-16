@@ -39,8 +39,8 @@ export function apply(ctx, config) {
   const service = createNativeAgentService(ctx, store, { ...settings, dataRoot });
   const monitoring = createNativeMonitoring({ dataRoot, store, learningService: service, sessionQuery: ctx.sessionQuery });
   const recovery = createNativeRecoveryService(ctx, { store, learningService: service, dataRoot });
-  const uiRuns = createNativeUiRuns(ctx, store, { dataRoot });
   const execution = createNativeExecutionService(ctx, store, { dataRoot, reason: (...args) => recovery.reason(...args) });
+  const uiRuns = createNativeUiRuns(ctx, store, { dataRoot, execution });
   ctx.effect(() => () => service.dispose());
   ctx.effect(() => () => execution.dispose());
   ctx.effect(() => () => recovery.dispose());
@@ -54,6 +54,7 @@ export function apply(ctx, config) {
       output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       isConcurrencySafe: () => false,
       execute: async ({ name, input, expectedRevisionId, timeoutMs = 600000 }, exec) => {
+        if (execution.isHostCall(exec)) return execution.runHostCall({ name, input, expectedRevisionId }, exec);
         if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw new Error('timeoutMs must be between 1000 and 600000');
         const deadline = Date.now() + timeoutMs;
         const controller = new AbortController();
@@ -63,6 +64,9 @@ export function apply(ctx, config) {
         try {
           const result = await execution.run({ name, input, expectedRevisionId, timeoutMs: Math.min(120000, timeoutMs), deadline }, scopedExec);
           if (result.ok && !signal.aborted && Date.now() < deadline) return { status: 'completed', output: result.output, receipt: publicReceipt(result.receipt) };
+          if (result.failure?.stage === 'authorization') return { status: 'blocked',
+            error: { category: 'permission', code: result.failure.code, message: 'Native authorization did not allow safe continuation. Completed steps were retained; do not replay the capability.' },
+            receipt: publicReceipt(result.receipt) };
           const entry = result.entry ?? await store.get(name);
           if (!entry?.execution) return { status: 'blocked', error: { category: 'configuration', code: 'CAPABILITY_NOT_EXECUTABLE', message: 'The capability needs a native Agent-generated executable contract.' }, receipt: publicReceipt(result.receipt) };
           let trace;
