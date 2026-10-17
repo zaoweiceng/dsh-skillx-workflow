@@ -88,7 +88,7 @@ export function createStore({ dataRoot }) {
     if (!/^[a-f0-9-]+$/.test(row.revisionId)) throw new Error('Invalid revision reference');
     const full = JSON.parse(await readFile(join(root, 'revisions', `${row.revisionId}.json`), 'utf8'));
     if (full.name !== row.name || full.version !== row.version || full.revisionId !== row.revisionId) throw new Error('Revision identity mismatch');
-    return { ...full, enabled: row.enabled };
+    return { ...full, enabled: row.enabled, showOnHome: row.showOnHome === true };
   };
 
   const validateProjected = async (revisions, rows, signal) => {
@@ -132,7 +132,7 @@ export function createStore({ dataRoot }) {
         if (names.has(name)) throw new Error('Duplicate candidate name');
         names.add(name);
         revisions.push({ ...revision, enabled: previous?.enabled ?? true });
-        rows[name] = { name, description, kind, enabled: previous?.enabled ?? true, version: revision.version, revisionId: revision.revisionId };
+        rows[name] = { name, description, kind, showOnHome: previous?.showOnHome === true, homeOrder: previous?.homeOrder ?? null, enabled: previous?.enabled ?? true, version: revision.version, revisionId: revision.revisionId };
     }
     // Validate the projected publication before creating any visible revision.
     await validateProjected(revisions, rows, signal);
@@ -153,7 +153,7 @@ export function createStore({ dataRoot }) {
       const rows = await catalog();
       return Object.values(rows).filter(row => (!kind || row.kind === kind) && (includeDisabled || row.enabled))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map(row => includeDisabled ? { name: row.name, description: row.description, kind: row.kind, enabled: row.enabled, version: row.version, revisionId: row.revisionId } : { name: row.name, description: row.description });
+        .map(row => includeDisabled ? { name: row.name, description: row.description, kind: row.kind, enabled: row.enabled, showOnHome: row.showOnHome === true, homeOrder: row.homeOrder ?? null, version: row.version, revisionId: row.revisionId } : { name: row.name, description: row.description });
     },
     async get(name, { includeDisabled = false } = {}) {
       assertName(name);
@@ -162,7 +162,7 @@ export function createStore({ dataRoot }) {
       if (!row || (!includeDisabled && !row.enabled)) return undefined;
       return readRevision(row);
     },
-    async validateCandidates(candidates, { signal } = {}) {
+    async validateCandidates(candidates, { signal, replay = false } = {}) {
       signal?.throwIfAborted();
       if (!Array.isArray(candidates) || candidates.length > 20) throw new Error('Submit at most 20 capability candidates');
       if (!candidates.length) return { valid: true, candidates: [] };
@@ -170,7 +170,7 @@ export function createStore({ dataRoot }) {
       const revisions = candidates.map(input => {
         const normalized = normalizeCandidate(input);
         const previous = Object.hasOwn(rows, normalized.name) ? rows[normalized.name] : undefined;
-        return { ...normalized, version: (previous?.version ?? 0) + 1, revisionId: 'candidate', enabled: previous?.enabled ?? true };
+        return { ...normalized, version: replay ? (previous?.version ?? 1) : (previous?.version ?? 0) + 1, revisionId: 'candidate', enabled: previous?.enabled ?? true };
       });
       const bundles = await validateProjected(revisions, rows, signal);
       signal?.throwIfAborted();
@@ -211,6 +211,29 @@ export function createStore({ dataRoot }) {
         // Keep immutable revisions for already loaded executions and audit history.
         await publish(rows);
         return { deleted: true, name: removed.name, version: removed.version };
+      });
+    },
+    setHomeOrder(names) {
+      return exclusive(async () => {
+        if (!Array.isArray(names) || names.some(name => !validName(name)) || new Set(names).size !== names.length) throw new Error('Invalid home card order');
+        const rows = await catalog();
+        if (names.some(name => !Object.hasOwn(rows, name) || rows[name].showOnHome !== true)) throw new Error('Home cards changed; refresh before sorting');
+        const remaining = Object.values(rows).filter(row => row.showOnHome === true && !names.includes(row.name))
+          .sort((a, b) => (a.homeOrder ?? Infinity) - (b.homeOrder ?? Infinity) || a.name.localeCompare(b.name));
+        [...names, ...remaining.map(row => row.name)].forEach((name, index) => { rows[name].homeOrder = index; });
+        await publish(rows);
+        return { saved: true };
+      });
+    },
+    setShowOnHome(name, showOnHome) {
+      return exclusive(async () => {
+        assertName(name);
+        if (typeof showOnHome !== 'boolean') throw new Error('showOnHome must be boolean');
+        const rows = await catalog();
+        if (!Object.hasOwn(rows, name)) throw new Error('Capability not found');
+        rows[name].showOnHome = showOnHome;
+        await publish(rows);
+        return { ...rows[name] };
       });
     },
     setEnabled(name, enabled) {

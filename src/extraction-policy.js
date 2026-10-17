@@ -1,13 +1,13 @@
 import { parse } from 'acorn';
 
 /** Evidence size is known before dispatch; freeze the calculated budget for auditing. */
-export function extractionBudget(files, { timeoutMs = 1800000, maxTimeoutMs = 14400000,
+export function extractionBudget(files, { timeoutMs = 600000, maxTimeoutMs = 900000, totalTimeoutMs = 600000,
   recordsPerBudgetUnit = 100, bytesPerBudgetUnit = 262144, stageCount = 1 } = {}) {
   const records = files.reduce((sum, file) => sum + file.recordCount, 0);
   const bytes = files.reduce((sum, file) => sum + file.bytes, 0);
   const units = Math.max(1, Math.ceil(records / recordsPerBudgetUnit), Math.ceil(bytes / bytesPerBudgetUnit));
   return { mode: 'evidence-size', stageCount, records, bytes, units, baseTimeoutMs: timeoutMs,
-    maxTimeoutMs, recordsPerBudgetUnit, bytesPerBudgetUnit, timeoutMs: Math.min(maxTimeoutMs, timeoutMs * units * stageCount) };
+    maxTimeoutMs, totalTimeoutMs, recordsPerBudgetUnit, bytesPerBudgetUnit, timeoutMs: Math.min(totalTimeoutMs, maxTimeoutMs, timeoutMs * units) };
 }
 
 export function assertDependencyCalls(candidate) {
@@ -46,18 +46,20 @@ export async function validateExtractionPlan(plan, { files, readRecords, readVer
   }
   if (!plan.candidates.length && !plan.reuseNames.length) throw new Error('Use decision=skip with a reason when nothing is worth extracting');
   const names = new Set();
-  for (const candidate of plan.candidates) {
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate.name) || names.has(candidate.name)
-      || !['skill', 'workflow'].includes(candidate.kind) || typeof candidate.description !== 'string'
-      || !candidate.description.trim() || candidate.description.length > 300 || typeof candidate.scope !== 'string'
-      || !candidate.scope.trim() || candidate.scope.length > 800 || typeof candidate.reuseValue !== 'string' || !candidate.reuseValue.trim() || candidate.reuseValue.length > 400 || !Array.isArray(candidate.dependsOn)
-      || !Array.isArray(candidate.sourceRecords) || !candidate.sourceRecords.length || candidate.sourceRecords.length > 32) throw new Error('Invalid plan boundary or source references');
-    if (await store.get(candidate.name, { includeDisabled: true })) throw new Error('Plan duplicates an existing capability; read and explicitly reuse it');
+  const issues = [];
+  for (const [index, candidate] of plan.candidates.entries()) {
+    const add = (field, message) => issues.push({ code:'INVALID_PLAN_FIELD', candidate:candidate?.name, path:`/candidates/${index}/${field}`, field, message });
+    if (!candidate || typeof candidate !== 'object') { add('', 'Expected a candidate object'); continue; }
+    if (typeof candidate.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate.name) || names.has(candidate.name)) add('name','Require a unique kebab-case name');
+    if (!['skill','workflow'].includes(candidate.kind)) add('kind','Require skill or workflow');
+    for (const [field, limit] of [['description',300],['scope',800],['reuseValue',400]]) if (typeof candidate[field] !== 'string' || !candidate[field].trim() || candidate[field].length > limit) add(field,`Require a nonempty string of at most ${limit} characters; received ${typeof candidate[field] === 'string' ? candidate[field].length : typeof candidate[field]}`);
+    if (!Array.isArray(candidate.dependsOn) || candidate.dependsOn.some(name=>typeof name !== 'string')) add('dependsOn','Require an array of capability names');
+    if (!Array.isArray(candidate.sourceRecords) || !candidate.sourceRecords.length || candidate.sourceRecords.length > 32) add('sourceRecords','Require 1..32 fully read source record references');
+    else for (const [j, reference] of candidate.sourceRecords.entries()) if (!reference || !files.get(reference.sessionId)?.index[reference.record] || !readRecords.get(reference.sessionId)?.has(reference.record)) add(`sourceRecords/${j}`,'Plan must cite fully read source record numbers');
+    if (typeof candidate.name === 'string' && await store.get(candidate.name, { includeDisabled:true })) add('name','Plan duplicates an existing capability; read and explicitly reuse it');
     names.add(candidate.name);
-    for (const reference of candidate.sourceRecords) {
-      if (!files.get(reference.sessionId)?.index[reference.record] || !readRecords.get(reference.sessionId)?.has(reference.record)) throw new Error('Plan must cite fully read source record numbers');
-    }
   }
+  if (issues.length) throw Object.assign(new Error(JSON.stringify({code:'PLAN_VALIDATION_FAILED',issues})),{code:'PLAN_VALIDATION_FAILED',issues});
   const newReuses = plan.reuseNames.filter(name => names.has(name));
   if (newReuses.length) throw new Error('reuseNames is only for unchanged entries in the existing catalog, not new candidates: ' + newReuses.join(', ') + '. Remove these from reuseNames; use dependsOn for references between new candidates. An empty catalog requires reuseNames: [].');
   for (const name of plan.reuseNames) {

@@ -38,8 +38,8 @@ window.__ModuleLoader__.load({
       zh: { skillx: 'SkillX', workflow: '工作流', extract: '总结工作流', refresh: '刷新', open: '打开完整管理页面', empty: '暂无内容', loading: '加载中…', running: '正在总结工作流…', completed: '工作流总结完成', skipped: '未发现值得提取的可复用能力', failed: '工作流总结失败', dismiss: '关闭', manual: '工作流仅在你选择“总结工作流”时生成。', priority: '同名能力优先使用 SkillX 或工作流。' },
       en: { skillx: 'SkillX', workflow: 'Workflows', extract: 'Summarize workflow', refresh: 'Refresh', open: 'Open management page', empty: 'No entries yet', loading: 'Loading…', running: 'Summarizing workflow…', completed: 'Workflow summary completed', skipped: 'No worthwhile reusable capability found', failed: 'Workflow summary failed', dismiss: 'Dismiss', manual: 'Workflows are generated only when you choose “Summarize workflow”.', priority: 'SkillX and workflows take precedence over skills with the same name.' },
     }
-    Object.assign(dictionaries.zh, { search: '按名称或描述筛选', noMatches: '没有匹配的内容', enabled: '启用', disabled: '停用', back: '返回', optimize: '优化', execution: '执行会话 ID（多个用逗号或空格分隔）', cancel: '取消任务', details: '详情', result: '查看提取结果', conversation: '查看提取对话' })
-    Object.assign(dictionaries.en, { search: 'Filter by name or description', noMatches: 'No matching entries', enabled: 'Enabled', disabled: 'Disabled', back: 'Back', optimize: 'Optimize', execution: 'Execution session IDs (comma or space separated)', cancel: 'Cancel task', details: 'Details', result: 'View extraction result', conversation: 'View author conversation' })
+    Object.assign(dictionaries.zh, { home: '首页', showOnHome: '在首页展示', homeEmpty: '暂无首页卡片，请在 SkillX 或工作流选项卡中打开“在首页展示”。', editHome: '编辑', finishEditing: '完成', reorderCard: '拖动排序', search: '按名称或描述筛选', noMatches: '没有匹配的内容', enabled: '启用', disabled: '停用', back: '返回', optimize: '优化', execution: '执行会话 ID（多个用逗号或空格分隔）', cancel: '取消任务', details: '详情', result: '查看提取结果', conversation: '查看提取对话' })
+    Object.assign(dictionaries.en, { home: 'Home', showOnHome: 'Show on home', homeEmpty: 'No home cards yet. Turn on “Show on home” in the SkillX or Workflows tab.', editHome: 'Edit', finishEditing: 'Done', reorderCard: 'Drag to reorder', search: 'Filter by name or description', noMatches: 'No matching entries', enabled: 'Enabled', disabled: 'Disabled', back: 'Back', optimize: 'Optimize', execution: 'Execution session IDs (comma or space separated)', cancel: 'Cancel task', details: 'Details', result: 'View extraction result', conversation: 'View author conversation' })
     Object.assign(dictionaries.zh, {"monitoring":"监控面板","tokens":"Token 消耗","success":"任务成功率","failure":"任务失败率","skillxCalls":"SkillX 调用量","workflowCalls":"Workflow 调用量","duration":"任务耗时排行","reasons":"失败原因排行","timeRange":"时间范围","custom":"自定义","hours":"小时","days":"天","start":"开始日期","end":"结束日期","invalidRange":"请选择有效日期，范围最多 366 天","trend":"趋势","noSamples":"无样本","rank":"排名","task":"任务","status":"状态","createdAt":"创建时间","reason":"失败原因","count":"次数","previous":"上一页","next":"下一页","unfinished":"未结束","blocked":"阻塞","cancelled":"已取消","queued":"排队中","sessions":"Session / 执行记录","records":"查看原始记录","runId":"执行 ID","monitoringIntro":"用量与执行质量。每个面板可独立选择时间。","callsBasis":"按原生顶层能力执行计数；不重复计算内部依赖与恢复。","tokensBasis":"原生能力执行及学习任务已上报的 Token；不包含普通对话及独立后台维护。","tasksBasis":"按创建时间统计能力执行和学习任务；取消与未结束任务不计入成功/失败率。","incompleteUsage":"个任务的用量未上报或不完整，仅汇总已知用量","skippedRecords":"条记录无法读取，未计入统计","sessionsBasis":"原生执行记录可分页查看工具参数、结果与结束状态；学习任务可打开 DSH 会话。敏感字段脱敏。"})
     Object.assign(dictionaries.en, {"monitoring":"Monitoring","tokens":"Token usage","success":"Task success rate","failure":"Task failure rate","skillxCalls":"SkillX calls","workflowCalls":"Workflow calls","duration":"Task duration ranking","reasons":"Failure reasons","timeRange":"Time range","custom":"Custom","hours":" hours","days":" days","start":"Start date","end":"End date","invalidRange":"Choose valid dates spanning at most 366 days","trend":"Trend","noSamples":"No samples","rank":"Rank","task":"Task","status":"Status","createdAt":"Created at","reason":"Failure reason","count":"Count","previous":"Previous","next":"Next","unfinished":"Unfinished","blocked":"Blocked","cancelled":"Cancelled","queued":"Queued","sessions":"Session / execution records","records":"View raw records","runId":"Execution ID","monitoringIntro":"Usage and execution quality. Each panel has its own time range.","callsBasis":"Top-level native capability executions; excludes duplicate dependency and recovery calls.","tokensBasis":"Reported native execution and learning tokens; excludes ordinary chat and independent background maintenance.","tasksBasis":"Native executions and learning tasks by creation time; cancelled and unfinished tasks are excluded from rates.","incompleteUsage":"tasks have missing or incomplete usage; only known usage is summed","skippedRecords":"unreadable records excluded from statistics","sessionsBasis":"Page through native tool arguments, results and end states, or open the DSH learning session. Sensitive fields are redacted."})
     Object.assign(dictionaries.zh, { elapsed: '耗时', executionSettled: '执行已完成', statusCompleted: '成功', statusFailed: '失败', statusRunning: '运行中' })
@@ -52,6 +52,8 @@ window.__ModuleLoader__.load({
     Object.assign(dictionaries.en, {sessionNotReady:'Session is not ready yet. Try again shortly.'})
     Object.assign(dictionaries.zh, { deleteEntry: '删除', confirmDelete: '确认删除', deleteWarning: '删除后将从能力目录移除，历史执行记录保留。', deleteInUse: '无法删除，以下能力依赖此项：', deleteChanged: '能力已更新，请刷新后再删除。' })
     Object.assign(dictionaries.en, { deleteEntry: 'Delete', confirmDelete: 'Confirm deletion', deleteWarning: 'Remove from the catalog; retain execution history.', deleteInUse: 'Cannot delete; referenced by: ', deleteChanged: 'Capability changed. Refresh before deleting.' })
+    Object.assign(dictionaries.zh, { extractionModel:'提取模型', extractionModelIntro:'配置 SkillX 和工作流提取、优化使用的模型。默认使用 DSH DeepSeek Flash 的 Low 推理档位；复杂工作流可选择更高推理档位。保存后用于新启动的任务。', authoringModel:'模型', authoringEffort:'推理档位', saveExtractionModel:'保存配置', extractionModelSaved:'配置已保存' })
+    Object.assign(dictionaries.en, { extractionModel:'Extraction model', extractionModelIntro:'Choose the model for SkillX and workflow extraction and optimization. Defaults to DSH DeepSeek Flash with Low reasoning. Higher reasoning levels are available for complex workflows. Saved settings apply to newly started tasks.', authoringModel:'Model', authoringEffort:'Reasoning level', saveExtractionModel:'Save settings', extractionModelSaved:'Settings saved' })
     const box = { padding: 16, height: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden', color: 'var(--dsw-alias-label-primary)' }
     async function api(path, options) {
       const response = await fetch('/skillx-workflow/api/' + path, options)
@@ -120,23 +122,25 @@ window.__ModuleLoader__.load({
               h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: () => { setConfirming(false); setError('') } }, t('dismiss'))),
             error && h('p', { role: 'alert', style: { fontSize: 12, overflowWrap: 'anywhere' } }, error))
         }
-        function Page({ kind }) {
+        function Page({ kind, editing = false }) {
           const [data, setData] = React.useState(null)
           const [error, setError] = React.useState('')
           const [query, setQuery] = React.useState('')
           const [entry, setEntry] = React.useState(null)
           const [busy, setBusy] = React.useState(null)
+          const [dragged, setDragged] = React.useState(null)
           const state = React.useSyncExternalStore(subscribe, () => notice)
           const reload = () => { setError(''); return api('catalog').then(setData, error => setError(error.message)) }
           React.useEffect(() => { let active = true; api('catalog').then(value => { if (active) setData(value) }, error => { if (active) setError(error.message) }); return () => { active = false } }, [state?.kind])
           React.useEffect(() => { setEntry(null); setQuery('') }, [kind])
+          React.useEffect(() => { if (editing) setEntry(null) }, [editing])
           React.useEffect(() => {
             if (state?.kind !== 'completed' || !entry) return
             let active = true
             api('entries/' + encodeURIComponent(entry.name)).then(value => { if (active) setEntry(value) }, error => { if (active) setError(error.message) })
             return () => { active = false }
           }, [state?.kind, state?.taskId])
-          const rows = (kind === 'skillx' ? data?.capabilities : data?.workflows) || []
+          const rows = kind === 'home' ? [...(data?.capabilities || []), ...(data?.workflows || [])].filter(row => row.showOnHome === true).sort((a, b) => (a.homeOrder ?? Infinity) - (b.homeOrder ?? Infinity) || a.name.localeCompare(b.name)) : (kind === 'skillx' ? data?.capabilities : data?.workflows) || []
           const filtered = rows.filter(row => (row.name + ' ' + displayDescription(row.description)).toLowerCase().includes(query.toLowerCase()))
           const control = { font: 'inherit', color: 'var(--dsw-alias-label-primary)', background: 'var(--dsw-specific-sidebar-fill)', border: '1px solid var(--sxw-control-border)', borderRadius: 'var(--dsw-radius-md, 8px)', padding: '8px 10px' }
           async function open(row) {
@@ -147,9 +151,25 @@ window.__ModuleLoader__.load({
             setBusy(row.name); setError('')
             try { await api('entries/' + encodeURIComponent(row.name) + '/availability', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: row.enabled === false }) }); await reload() } catch (error) { setError(error.message) } finally { setBusy(null) }
           }
+          async function toggleHome(row) {
+            setBusy(row.name); setError('')
+            try { await api('entries/' + encodeURIComponent(row.name) + '/homepage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ showOnHome: row.showOnHome !== true }) }); await reload() } catch (error) { setError(error.message) } finally { setBusy(null) }
+          }
+          async function moveCard(source, target) {
+            if (!editing || busy || !source || source === target) return
+            const names = rows.map(row => row.name)
+            if (!names.includes(source) || !names.includes(target)) return
+            const targetIndex = names.indexOf(target)
+            names.splice(names.indexOf(source), 1); names.splice(targetIndex, 0, source)
+            setBusy('home-order'); setError('')
+            try {
+              await api('homepage/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names }) })
+              await reload()
+            } catch (error) { setError(error.message) } finally { setBusy(null); setDragged(null) }
+          }
           return h('section', { className: 'sxw-page', style: { ...box, padding: 0, display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 1248, margin: '0 auto' }, 'aria-label': t(kind) },
             h('style', null, '.sxw-page .sxw-row:last-child{border-bottom:0!important}.sxw-page .sxw-row:hover{background:var(--dsw-specific-sidebar-fill)}.sxw-page .sxw-name{white-space:normal!important;height:auto!important;text-align:left;overflow-wrap:anywhere;max-width:100%;justify-content:flex-start}.sxw-page .sxw-name:focus-visible{outline:2px solid currentColor;outline-offset:3px}'),
-            !entry && h('header', { style: { padding: '24px 24px 0', flexShrink: 0 } },
+            !entry && kind !== 'home' && h('header', { style: { padding: '24px 24px 0', flexShrink: 0 } },
               h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 12, border: '1px solid var(--sxw-border)', background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 12 } },
                 h('input', { type: 'search', value: query, placeholder: t('search'), 'aria-label': t('search'), onChange: event => setQuery(event.target.value), style: { ...control, background: 'transparent', width: 360, flex: '1 1 240px', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' } }),
                 h(Button, { variant: 'ghost', size: 'sm', onClick: reload }, t('refresh')))),
@@ -157,10 +177,25 @@ window.__ModuleLoader__.load({
               error && h('p', { role: 'alert' }, error),
               !data && !error && h('p', null, t('loading')),
               entry ? h(EntryDetail, { key: entry.revisionId, entry, onBack: () => setEntry(null), onDeleted: async () => { setEntry(null); await reload() }, preparing: state?.kind === 'running' }) :
+                kind === 'home' ? h('div', null,
+                  data && !filtered.length && h('p', { role: 'status', style: note }, t(query ? 'noMatches' : 'homeEmpty')),
+                  h('div', { className: 'sxw-home-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,280px),1fr))', gap: 16 } }, filtered.map(row => h('button', {
+                    key: row.name, type: 'button', className: 'sxw-home-card', disabled: busy !== null, draggable: editing && !busy, onClick: () => { if (!editing) return open(row) }, 'aria-label': row.name + ' ' + t(editing ? 'reorderCard' : 'execute'),
+                    onDragStart: event => { setDragged(row.name); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', row.name) },
+                    onDragEnd: () => setDragged(null),
+                    onDragOver: event => { if (editing && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } },
+                    onDrop: event => { event.preventDefault(); return moveCard(dragged || event.dataTransfer.getData('text/plain'), row.name) },
+                    onKeyDown: event => { if (editing && event.altKey && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); const index = rows.indexOf(row) + (event.key === 'ArrowLeft' ? -1 : 1); if (rows[index]) void moveCard(row.name, rows[index].name) } },
+                    style: { ...card, font: 'inherit', color: 'inherit', textAlign: 'left', cursor: editing ? 'grab' : 'pointer', opacity: dragged === row.name ? 0.45 : 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12 }
+                  }, h('span', { style: note }, t(row.kind === 'workflow' ? 'workflow' : 'skillx')),
+                    h('strong', { style: { fontSize: 16, overflowWrap: 'anywhere' } }, row.name),
+                    h('span', { title: displayDescription(row.description), style: { fontSize: 13, lineHeight: 1.7, overflowWrap: 'anywhere' } }, Array.from(displayDescription(row.description) || '').length > 80 ? Array.from(displayDescription(row.description)).slice(0, 80).join('') + '…' : displayDescription(row.description)),
+                    h('span', { style: { ...note, marginTop: 'auto' } }, editing ? '⠿ ' + t('reorderCard') : t(row.enabled === false ? 'disabled' : 'execute') + ' →'))))) :
                 h('div', { style: { margin: 0, padding: '0 20px', minWidth: 0, border: '1px solid var(--sxw-border)', borderRadius: 14 } }, h('div', { style: { padding: '16px 0', fontSize: 13, fontWeight: 500, color: 'var(--dsw-alias-label-secondary)', borderBottom: '1px solid var(--sxw-divider)' } }, t(kind) + ' · ' + filtered.length), data && !filtered.length && h('p', { role: 'status', style: { padding: '16px 0', color: 'var(--dsw-alias-label-secondary)' } }, t(query ? 'noMatches' : 'empty')), filtered.map(row => h('div', { key: row.name, className: 'sxw-row', style: { display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'flex-start', padding: '18px 0', borderBottom: '1px solid var(--sxw-divider)' } },
                   h('div', { style: { flex: '1 1 220px', minWidth: 0 } }, h(Button, { variant: 'ghost', size: 'sm', disabled: busy === row.name, onClick: () => open(row), className: 'sxw-name', style: { padding: 0, fontWeight: 600, fontSize: 14, lineHeight: '22px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }, row.name),
                     h('p', { style: { margin: '6px 0 0', fontSize: 13, lineHeight: 1.6, color: 'var(--dsw-alias-label-primary)', overflowWrap: 'anywhere' } }, displayDescription(row.description))),
                   h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 2, fontSize: 12, lineHeight: '20px', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' } }, h('input', { type: 'checkbox', role: 'switch', checked: row.enabled !== false, disabled: busy === row.name, 'aria-label': row.name + ' ' + t('enabled'), onChange: () => toggle(row), style: { accentColor: 'var(--dsw-alias-label-primary)' } }), t(row.enabled === false ? 'disabled' : 'enabled')),
+                  h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, fontSize: 12, lineHeight: '20px', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' } }, h('input', { type: 'checkbox', role: 'switch', checked: row.showOnHome === true, disabled: busy === row.name, 'aria-label': row.name + ' ' + t('showOnHome'), onChange: () => toggleHome(row), style: { accentColor: 'var(--dsw-alias-label-primary)' } }), t('showOnHome')),
                   h(DeleteEntry, { entry: row, onDeleted: reload }))))))
         }
         const control = { font: 'inherit', color: 'var(--dsw-alias-label-primary)', background: 'transparent', border: '1px solid var(--sxw-control-border)', borderRadius: 8, padding: '6px 8px', maxWidth: '100%' }
@@ -450,9 +485,43 @@ window.__ModuleLoader__.load({
             h('header', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 16 } }, h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRevision(value => value + 1) }, t('refresh'))),
             h(Sessions, { revision }))
         }
-        function Workspace({ initialTab = 'skillx' }) {
+        function ExtractionModel() {
+          const [data, setData] = React.useState(null)
+          const [selection, setSelection] = React.useState(null)
+          const [error, setError] = React.useState('')
+          const [busy, setBusy] = React.useState(false)
+          const [saved, setSaved] = React.useState(false)
+          React.useEffect(() => {
+            let active = true
+            api('extraction-model').then(value => { if (active) { setData(value); setSelection(value.selection) } }, error => { if (active) setError(error.message) })
+            return () => { active = false }
+          }, [])
+          const selected = data?.models.find(model => model.provider === selection?.provider && model.model === selection?.model)
+          const control = { width:'100%', padding:10, border:'1px solid var(--sxw-control-border)', borderRadius:8, background:'var(--dsw-alias-background-primary)', color:'inherit', fontSize:14 }
+          async function save(event) {
+            event.preventDefault(); setBusy(true); setError(''); setSaved(false)
+            try { const value = await api('extraction-model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(selection)}); setSelection(value.selection); setSaved(true) }
+            catch (error) { setError(error.message) }
+            finally { setBusy(false) }
+          }
+          return h('section', {style:{padding:24,overflow:'auto'}}, h('div', {style:{maxWidth:720,margin:'0 auto'}},
+            h('p', {style:{fontSize:14,lineHeight:1.7}}, t('extractionModelIntro')),
+            error && h('p', {role:'alert'}, error),
+            selection && h('form', {onSubmit:save,style:{display:'grid',gap:16}},
+              h('label', null, t('authoringModel'), h('select', {'aria-label':t('authoringModel'),style:control,disabled:busy,value:JSON.stringify([selection.provider,selection.model]),onChange:event => {
+                const [provider, model] = JSON.parse(event.target.value)
+                const next = data.models.find(item => item.provider === provider && item.model === model)
+                const effort = next.efforts.find(item => item.id === selection.reasoningEffort) || next.efforts.find(item => item.id === 'low') || next.efforts[0]
+                setSelection({provider,model,reasoningEffort:effort?.id}); setSaved(false)
+              }}, data.models.map(model => h('option', {key:JSON.stringify([model.provider,model.model]),value:JSON.stringify([model.provider,model.model])}, model.providerName+' / '+model.name)))),
+              h('label', null, t('authoringEffort'), h('select', {'aria-label':t('authoringEffort'),style:control,disabled:busy,value:selection.reasoningEffort,onChange:event => {setSelection({...selection,reasoningEffort:event.target.value});setSaved(false)}}, selected?.efforts.map(effort => h('option', {key:effort.id,value:effort.id},effort.name)))),
+              h(Button, {type:'submit',disabled:busy || !selection.reasoningEffort}, t('saveExtractionModel')),
+              saved && h('p', {role:'status'}, t('extractionModelSaved')))))
+        }
+        function Workspace({ initialTab = 'home' }) {
           const [tab, setTab] = React.useState(initialTab)
-          const tabs = ['skillx', 'workflow', 'monitoring', 'runHistory']
+          const [editing, setEditing] = React.useState(false)
+          const tabs = ['home', 'skillx', 'workflow', 'monitoring', 'runHistory', 'extractionModel']
           function onKeyDown(event) {
             const index = tabs.indexOf(tab)
             const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
@@ -460,10 +529,11 @@ window.__ModuleLoader__.load({
             event.preventDefault(); setTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next].focus()
           }
           return h('section', { className: 'sxw-workspace', style: { ...box, padding: 0, display: 'flex', flexDirection: 'column' }, 'aria-label': t('skillx') },
-            h('style', null, '.sxw-workspace{--sxw-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-control-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-divider:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-line:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent)}.sxw-detail{container-type:inline-size}.sxw-execute-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}@container(min-width:900px){.sxw-execute-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}.sxw-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px 24px}.sxw-workspace-header{width:100%;max-width:1248px;margin:0 auto;padding:28px 24px 0;box-sizing:border-box;flex-shrink:0}.sxw-tab:hover{background:var(--dsw-specific-sidebar-fill)!important}.sxw-tab:focus-visible{outline:2px solid currentColor;outline-offset:3px}@media(max-width:760px){.sxw-workspace-header{padding:20px 16px 0}.sxw-page>header{padding:16px 16px 0!important}.sxw-page>div{padding:16px!important}}'),
+            h('style', null, '.sxw-workspace{--sxw-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-control-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-divider:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-line:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent)}.sxw-detail{container-type:inline-size}.sxw-execute-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}@container(min-width:900px){.sxw-execute-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}.sxw-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px 24px}.sxw-workspace-header{width:100%;max-width:1248px;margin:0 auto;padding:28px 24px 0;box-sizing:border-box;flex-shrink:0}.sxw-home-card:hover{background:var(--dsw-specific-sidebar-fill)!important}.sxw-home-card:focus-visible{outline:2px solid currentColor;outline-offset:3px}.sxw-tab:hover{background:var(--dsw-specific-sidebar-fill)!important}.sxw-tab:focus-visible{outline:2px solid currentColor;outline-offset:3px}@media(max-width:760px){.sxw-workspace-header{padding:20px 16px 0}.sxw-page>header{padding:16px 16px 0!important}.sxw-page>div{padding:16px!important}}'),
             h('header', { className: 'sxw-workspace-header' }, h('h1', { style: { fontSize: 22, lineHeight: '30px', fontWeight: 600, margin: '0 0 20px', letterSpacing: '-0.4px' } }, t('skillx')),
-              h('div', { role: 'tablist', 'aria-label': t('skillx'), onKeyDown, style: { display: 'flex', gap: 6, paddingBottom: 16, overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid var(--sxw-divider)' } }, tabs.map(kind => h('button', { key: kind, className: 'sxw-tab', id: 'sxw-tab-' + kind, type: 'button', role: 'tab', 'aria-selected': tab === kind, 'aria-controls': 'sxw-panel-' + kind, tabIndex: tab === kind ? 0 : -1, onClick: () => setTab(kind), style: { font: 'inherit', fontSize: 14, fontWeight: tab === kind ? 600 : 400, borderRadius: 8, color: tab === kind ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', cursor: 'pointer', background: tab === kind ? 'var(--dsw-specific-sidebar-fill)' : 'transparent', border: '1px solid ' + (tab === kind ? 'var(--sxw-border)' : 'transparent'), padding: '9px 16px' } }, t(kind))))),
-            tabs.map(kind => h('div', { key: kind, id: 'sxw-panel-' + kind, role: 'tabpanel', 'aria-labelledby': 'sxw-tab-' + kind, hidden: tab !== kind, style: { flex: 1, minHeight: 0, minWidth: 0 } }, tab === kind && (kind === 'monitoring' ? h(Monitoring) : kind === 'runHistory' ? h(ExecutionHistory) : h(Page, { key: kind, kind })))))
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--sxw-divider)' } }, h('div', { role: 'tablist', 'aria-label': t('skillx'), onKeyDown, style: { display: 'flex', gap: 6, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap' } }, tabs.map(kind => h('button', { key: kind, className: 'sxw-tab', id: 'sxw-tab-' + kind, type: 'button', role: 'tab', 'aria-selected': tab === kind, 'aria-controls': 'sxw-panel-' + kind, tabIndex: tab === kind ? 0 : -1, onClick: () => setTab(kind), style: { font: 'inherit', fontSize: 14, fontWeight: tab === kind ? 600 : 400, borderRadius: 8, color: tab === kind ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', cursor: 'pointer', background: tab === kind ? 'var(--dsw-specific-sidebar-fill)' : 'transparent', border: '1px solid ' + (tab === kind ? 'var(--sxw-border)' : 'transparent'), padding: '9px 16px' } }, t(kind)))),
+                h(Button, { variant: 'ghost', size: 'sm', 'aria-pressed': editing, onClick: () => { setTab('home'); setEditing(!editing) }, style: { flexShrink: 0 } }, t(editing ? 'finishEditing' : 'editHome')))),
+            tabs.map(kind => h('div', { key: kind, id: 'sxw-panel-' + kind, role: 'tabpanel', 'aria-labelledby': 'sxw-tab-' + kind, hidden: tab !== kind, style: { flex: 1, minHeight: 0, minWidth: 0 } }, tab === kind && (kind === 'extractionModel' ? h(ExtractionModel) : kind === 'monitoring' ? h(Monitoring) : kind === 'runHistory' ? h(ExecutionHistory) : h(Page, { key: kind, kind, editing: kind === 'home' && editing })))))
         }
         function Notice() {
           const state = React.useSyncExternalStore(subscribe, () => notice)

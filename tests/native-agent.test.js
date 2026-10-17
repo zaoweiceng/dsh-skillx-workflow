@@ -168,9 +168,9 @@ test('large single-source evidence stays in JSONL and supports selective bounded
     assert.equal(excerpt.completeRecord, false);
     assert.ok(JSON.stringify(excerpt).length < 2000);
     const partial = await read.execute({ sessionId: 'source', view: 'records', cursor: index.matches[0].record, limit: 1 }, {});
-    assert.equal(partial.encoding, 'json-text-fragments');
+    assert.equal(partial.completeRecord, false);
     assert.ok(Buffer.byteLength(JSON.stringify(partial)) < 11000);
-    assert.ok(partial.nextPartCursor > 0);
+    assert.equal(partial.records[0].record,index.matches[0].record);
     await submit(env); end(env.events);
   });
   const large = structuredClone(source);
@@ -218,7 +218,7 @@ test('multiple sources require relevant details from each, without requiring exh
 });
 
 
-test('default author has no 20-step ceiling', async t => {
+test('step estimates do not cancel an author that can complete', async t => {
   const f = await fixture(t, async env => {
     for (let i = 0; i < 25; i++) {
       const result = await env.listeners.get('agent/pre-step')({}, async () => ({ kind: 'continue' }));
@@ -227,7 +227,10 @@ test('default author has no 20-step ceiling', async t => {
     await submit(env); end(env.events);
   });
   const task = await f.service.start({ sessionId: 'source' });
-  assert.equal((await settled(f.service, task.taskId)).status, 'completed');
+  const stopped = await settled(f.service, task.taskId);
+  assert.equal(stopped.status, 'completed');
+  assert.equal(stopped.stopReason, undefined);
+  assert.equal((await f.store.list()).length,1);
 });
 
 

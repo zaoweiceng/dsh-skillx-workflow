@@ -34,7 +34,10 @@ test('native plugin exposes direct catalog/runtime API and disposes its route', 
   const f = await host(t, true);
   assert.equal(f.ctx.webServer.routes.length, 1);
   assert.deepEqual((await f.request('GET', 'catalog')).body, { capabilities: [], workflows: [] });
-  assert.deepEqual((await f.request('GET', 'runtime')).body, { mode: 'native-agent', dataRoot: f.dataRoot, enableCapabilities: true });
+  const runtime=(await f.request('GET', 'runtime')).body;
+  assert.deepEqual({mode:runtime.mode,dataRoot:runtime.dataRoot,enableCapabilities:runtime.enableCapabilities}, { mode: 'native-agent', dataRoot: f.dataRoot, enableCapabilities: true });
+  assert.equal(runtime.generationPolicy.revision,'contract-invocation-v13');
+  assert.equal(runtime.generationPolicy.totalTimeoutMs,600000);
   assert.deepEqual(await f.ctx.skills.list(), []);
   await f.fork.dispose(); assert.equal(f.ctx.webServer.routes.length, 0);
 });
@@ -45,6 +48,7 @@ test('baseline disables native provider while UI routes stay available', async t
   assert.equal((await f.request('GET', 'catalog')).status, 200);
   assert.equal((await f.request('GET', 'entries/unknown')).status, 404);
   assert.equal((await f.request('POST', 'entries/unknown/availability', { enabled: true })).status, 400);
+  assert.equal((await f.request('POST', 'entries/unknown/homepage', { showOnHome: true })).status, 400);
   assert.deepEqual(await f.ctx.skills.list(), []);
 });
 

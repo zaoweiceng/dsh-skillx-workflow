@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { extractionBudget, assertDependencyCalls, validateExtractionPlan, assertPlanSubmission } from '../src/extraction-policy.js';
 
 const call = (program, dependencies = []) => ({ execution: { program }, dependencies: dependencies.map(name => ({ name, version: 1 })) });
-test('adaptive budget uses both line count and bytes, with a configurable multi-hour ceiling', () => {
-  assert.equal(extractionBudget([{ recordCount: 38, bytes: 63784 }]).timeoutMs, 1800000);
-  assert.equal(extractionBudget([{ recordCount: 201, bytes: 1000 }]).timeoutMs, 5400000);
-  assert.equal(extractionBudget([{ recordCount: 1, bytes: 600000 }]).timeoutMs, 5400000);
-  assert.equal(extractionBudget([{ recordCount: 100000, bytes: 100000000 }]).timeoutMs, 14400000);
+test('evidence size never expands dispatch beyond the total time budget', () => {
+  assert.equal(extractionBudget([{ recordCount: 38, bytes: 63784 }]).timeoutMs, 600000);
+  assert.equal(extractionBudget([{ recordCount: 201, bytes: 1000 }]).timeoutMs, 600000);
+  assert.equal(extractionBudget([{ recordCount: 1, bytes: 600000 }]).timeoutMs, 600000);
+  assert.equal(extractionBudget([{ recordCount: 100000, bytes: 100000000 }]).timeoutMs, 600000);
 });
 test('dependency checks use syntax, ignore prose/comments, and require actual literal calls', () => {
   assert.doesNotThrow(() => assertDependencyCalls(call("// capabilities.run({name:'fake'})\nreturn 'capabilities.run';")));
@@ -25,7 +25,7 @@ test('plans require read evidence and reject cyclic decompositions before buildi
   assert.throws(() => assertPlanSubmission({ decision: 'extract', reason: '独立复用', candidates: [leaf], reuseNames: [] }, [{ name: 'other', kind: 'skill' }], []), /differ/);
 });
 
-test('known independent phases expand the frozen size-based budget before dispatch',()=>{
+test('independent phases share the same frozen total budget',()=>{
  const budget=extractionBudget([{recordCount:38,bytes:64000}],{stageCount:3});
- assert.equal(budget.stageCount,3); assert.equal(budget.timeoutMs,90*60*1000);
+ assert.equal(budget.stageCount,3); assert.equal(budget.timeoutMs,10*60*1000);
 });

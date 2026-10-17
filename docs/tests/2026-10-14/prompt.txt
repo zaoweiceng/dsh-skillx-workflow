@@ -1,1 +1,0 @@
-在 /code/dsh-mr-e2e-fixture-20261014/repo 检查并完整提交现有未提交改动（2 个已修改文件、3 个新增文件），只提交一次本地 Git commit，提交信息固定为 test: update commit e2e fixture；不要修改文件内容，不要创建分支。然后使用本地模拟 Git 托管服务创建 MR、合并该 MR，并回读确认合并结果。API 文档在 /Users/USER/code/dsh-mr-e2e-fixture-20261014/API.md。全程只操作这个隔离仓库和本地模拟服务，不添加 remote，不执行真实 push 或真实远端操作。返回 commit SHA、MR ID、最终 MR 状态和模拟合并结果 SHA，并说明最终 git status。

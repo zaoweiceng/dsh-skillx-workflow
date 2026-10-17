@@ -134,3 +134,40 @@ test('batch publication is atomic across conflicts and cancellation', async t =>
   assert.equal(changes, 1);
   assert.equal((await store.list()).length, 3);
 });
+
+
+test('home selection persists independently of availability and survives optimization', async t => {
+  const store = await fixture(t);
+  await store.commit(input());
+  assert.equal((await store.list('workflow', { includeDisabled: true }))[0].showOnHome, false);
+  await store.setShowOnHome('native-example', true);
+  await store.setEnabled('native-example', false);
+  const reopened = createStore({ dataRoot: store.dataRoot });
+  assert.equal((await reopened.get('native-example', { includeDisabled: true })).showOnHome, true);
+  await reopened.commit(input({ operation: 'optimize', baseVersion: 1 }));
+  const entry = (await reopened.list('workflow', { includeDisabled: true }))[0];
+  assert.equal(entry.showOnHome, true);
+  assert.equal(entry.enabled, false);
+  await assert.rejects(reopened.setShowOnHome('native-example', 'yes'), /boolean/);
+  await assert.rejects(reopened.setShowOnHome('missing', true), /not found/);
+  await reopened.setShowOnHome('native-example', false);
+  assert.equal((await reopened.get('native-example', { includeDisabled: true })).showOnHome, false);
+});
+
+
+test('home card order spans kinds, persists and survives optimization', async t => {
+  const store = await fixture(t);
+  await store.commit(input());
+  await store.commit(input({ name: 'another', kind: 'skill' }));
+  await store.setShowOnHome('native-example', true);
+  await store.setShowOnHome('another', true);
+  await store.setHomeOrder(['native-example', 'another']);
+  const reopened = createStore({ dataRoot: store.dataRoot });
+  await reopened.commit(input({ operation: 'optimize', baseVersion: 1 }));
+  const rows = await reopened.list(undefined, { includeDisabled: true });
+  assert.deepEqual(rows.sort((a,b) => a.homeOrder - b.homeOrder).map(row => row.name), ['native-example', 'another']);
+  await assert.rejects(store.setHomeOrder(['another', 'another']), /Invalid/);
+  await assert.rejects(store.setHomeOrder(['missing']), /changed/);
+  await store.setHomeOrder(['another']);
+  assert.equal((await store.list('skill', { includeDisabled: true }))[0].homeOrder, 0);
+});

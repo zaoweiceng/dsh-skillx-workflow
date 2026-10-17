@@ -7,7 +7,7 @@ function bundledContent(bundle) {
     available: Boolean(root.execution),
     invocation: root.execution ? { tool: 'capability_run', arguments: { name: root.name, input: 'Object matching inputSchema' } } : null,
     instruction: root.execution
-      ? 'Invoke capability_run with the requested inputs. Implementation and dependencies are private to the executor. Use its verified output/receipt; do not reconstruct or repeat internal steps. External blockers require caller action; internal repair is handled inside the plugin.'
+      ? 'Invoke capability_run once with the requested inputs. Load this root contract only: the executor resolves its dependencies and CLI operations internally. Use the verified output/receipt; combine any missing final read-only fields into one check. External blockers require caller action; internal repair is handled inside the plugin.'
       : 'This legacy definition has no executable contract yet. Ask the native optimization Agent to compile it before black-box invocation.',
   });
 }

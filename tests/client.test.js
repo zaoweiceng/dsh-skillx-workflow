@@ -47,7 +47,7 @@ test('native list filters in header, shows row switches, fetches details and cha
   assert.equal(requests.length, 0, 'registration does not automatically extract');
   const flatten = node => node && typeof node === 'object' ? [node, ...(node.children || []).flatMap(flatten)] : [];
   const Workspace = slots.get('main:skillx-workflow.skillx')().type;
-  const workspace = Workspace({});
+  const workspace = Workspace({ initialTab: 'skillx' });
   const Page = flatten(workspace).find(node => node.props.kind === 'skillx').type;
   state.length = 0; state[0] = catalog;
   const render = () => { cursor = 0; return Page({ kind: 'skillx' }); };
@@ -55,18 +55,49 @@ test('native list filters in header, shows row switches, fetches details and cha
   assert.equal(nodes.some(node => node.type === 'iframe'), false);
   const header = nodes.find(node => node.type === 'header');
   assert.equal(flatten(header).some(node => node.type === 'input' && node.props.type === 'search'), true);
-  assert.equal(nodes.filter(node => node.props.role === 'switch').length, 2);
+  assert.equal(nodes.filter(node => node.props.role === 'switch').length, 4);
   await nodes.find(node => node.props.role === 'switch').props.onChange();
   assert.equal(requests[0].url, '/skillx-workflow/api/entries/alpha/availability');
   assert.deepEqual(JSON.parse(requests[0].options.body), { enabled: false });
+  await nodes.find(node => node.props['aria-label'] === 'alpha showOnHome').props.onChange();
+  assert.equal(requests.at(-2).url, '/skillx-workflow/api/entries/alpha/homepage');
+  assert.deepEqual(JSON.parse(requests.at(-2).options.body), { showOnHome: true });
   nodes.find(node => node.type === 'input' && node.props.type === 'search').props.onChange({ target: { value: 'Second' } });
-  nodes = flatten(render()); assert.equal(nodes.filter(node => node.props.role === 'switch').length, 1);
+  nodes = flatten(render()); assert.equal(nodes.filter(node => node.props.role === 'switch').length, 2);
   state[2] = ''; nodes = flatten(render());
   await nodes.find(node => node.type === 'Button' && node.children.includes('alpha')).props.onClick();
   nodes = flatten(render());
   assert.equal(nodes.find(node => node.props.entry).props.entry.content, '# Actual content');
   assert.equal(nodes.some(node => node.type === 'input' && node.props.type === 'search'), false);
   assert.equal(requests.some(request => request.url.endsWith('/extract') || request.url.endsWith('/optimize')), false);
+  state.length = 0; cursor = 0;
+  const homeWorkspace = Workspace({});
+  assert.equal(flatten(homeWorkspace).find(node => node.props.role === 'tab' && node.props['aria-selected']).children[0], 'home');
+  state.length = 0; state[0] = catalog;
+  catalog.capabilities[0].description = '长' .repeat(100);
+  const renderHome = () => { cursor = 0; return Page({ kind: 'home' }); };
+  assert.ok(flatten(renderHome()).some(node => node.props.role === 'status' && node.children.includes('homeEmpty')));
+  catalog.capabilities[0].showOnHome = true; catalog.workflows[0].showOnHome = true;
+  nodes = flatten(renderHome());
+  assert.equal(nodes.filter(node => node.props.className === 'sxw-home-card').length, 2);
+  assert.equal(nodes.some(node => node.props.type === 'search'), false);
+  assert.ok(nodes.some(node => node.props.title === catalog.capabilities[0].description && node.children[0].length === 81));
+  assert.equal(nodes.some(node => node.props.className === 'sxw-home-card' && node.props['aria-label'].startsWith('beta')), false);
+  await nodes.find(node => node.props.className === 'sxw-home-card' && node.props['aria-label'] === 'alpha execute').props.onClick();
+  nodes = flatten(renderHome());
+  assert.equal(nodes.find(node => node.props.entry).props.entry.content, '# Actual content');
+  nodes.find(node => node.props.entry).props.onBack();
+  assert.equal(flatten(renderHome()).filter(node => node.props.className === 'sxw-home-card').length, 2);
+  cursor = 0; nodes = flatten(Page({ kind: 'home', editing: true }));
+  const cards = nodes.filter(node => node.props.className === 'sxw-home-card');
+  assert.equal(cards.every(node => node.props.draggable), true);
+  const before = requests.length;
+  cards[0].props.onClick(); assert.equal(requests.length, before);
+  await cards[1].props.onDrop({ preventDefault() {}, dataTransfer: { getData: () => 'alpha' } });
+  assert.equal(requests.at(-2).url, '/skillx-workflow/api/homepage/order');
+  assert.deepEqual(JSON.parse(requests.at(-2).options.body), { names: ['flow', 'alpha'] });
+
+
 });
 
 test('execution history opens the current learning phase at click time and surfaces navigation errors',async()=>{

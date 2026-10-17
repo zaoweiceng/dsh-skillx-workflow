@@ -5,6 +5,7 @@ import { createNativeUiRuns } from './native-ui-runs.js';
 import { createNativeMonitoring } from './native-monitoring.js';
 import { createStore } from './native-store.js';
 import { registerNativeSkills } from './native-skills.js';
+import { createExtractionModels } from './extraction-model.js';
 import { createNativeAgentService } from './native-agent.js';
 import { createNativeExecutionService } from './native-execution.js';
 import { createNativeRecoveryService } from './native-recovery.js';
@@ -15,15 +16,20 @@ export const name = 'dsh-skillx-workflow';
 export const inject = ['webServer', 'sessionQuery', 'agents', 'sessions', 'agentDefaultModel', 'tools', 'systemPrompt', 'skills'];
 export function resolveConfig(config = {}) {
   const result = { dataRoot: config.dataRoot, enableCapabilities: config.enableCapabilities ?? true,
-    timeoutMs: config.timeoutMs ?? 1800000, maxTimeoutMs: config.maxTimeoutMs ?? 14400000,
+    timeoutMs: config.timeoutMs ?? 600000, maxTimeoutMs: config.maxTimeoutMs ?? 900000,
+    totalTimeoutMs: config.totalTimeoutMs ?? 600000, maxOutputTokens: config.maxOutputTokens ?? 64000, maxTotalTokens: config.maxTotalTokens ?? 400000,
+    maxRequestOutputTokens: config.maxRequestOutputTokens ?? 12000, maxTotalSteps: config.maxTotalSteps ?? 40,
+    maxRepairAttempts: config.maxRepairAttempts ?? 3, maxRepeatedFailures: config.maxRepeatedFailures ?? 2,
     recordsPerBudgetUnit: config.recordsPerBudgetUnit ?? 100, bytesPerBudgetUnit: config.bytesPerBudgetUnit ?? 262144,
-    maxSteps: config.maxSteps, contractReview: config.contractReview ?? false };
+    maxSteps: config.maxSteps ?? 16, contractReview: config.contractReview ?? false };
   if (typeof result.contractReview !== 'boolean') throw new Error('contractReview must be boolean');
   if (typeof result.enableCapabilities !== 'boolean') throw new Error('enableCapabilities must be boolean');
   if (result.dataRoot !== undefined && (typeof result.dataRoot !== 'string' || !isAbsolute(result.dataRoot) || result.dataRoot.includes('\0'))) throw new Error('dataRoot must be an absolute local path');
   if (!Number.isInteger(result.timeoutMs) || result.timeoutMs < 100 || result.timeoutMs > 14400000) throw new Error('Invalid timeoutMs');
   if (result.maxSteps !== undefined && (!Number.isSafeInteger(result.maxSteps) || result.maxSteps < 1)) throw new Error('Invalid maxSteps');
-  if (!Number.isSafeInteger(result.maxTimeoutMs) || result.maxTimeoutMs < result.timeoutMs || result.maxTimeoutMs > 86400000) throw new Error('Invalid maxTimeoutMs');
+  if (!Number.isSafeInteger(result.maxTimeoutMs) || result.maxTimeoutMs < 100 || result.maxTimeoutMs > 86400000) throw new Error('Invalid maxTimeoutMs');
+  for (const key of ['totalTimeoutMs','maxTotalTokens','maxOutputTokens','maxRequestOutputTokens','maxTotalSteps','maxRepairAttempts','maxRepeatedFailures']) if (!Number.isSafeInteger(result[key]) || result[key] < 1) throw new Error('Invalid generation limit: ' + key);
+  if (result.totalTimeoutMs > 900000) throw new Error('totalTimeoutMs must not exceed 15 minutes');
   for (const key of ['recordsPerBudgetUnit', 'bytesPerBudgetUnit']) if (!Number.isSafeInteger(result[key]) || result[key] < 1) throw new Error('Invalid adaptive budget scale');
   return result;
 }
@@ -36,7 +42,8 @@ export function apply(ctx, config) {
   const profile = ctx.get('profileContext');
   const dataRoot = settings.dataRoot ?? join(profile?.dir || process.env.DSH_HOME || join(homedir(), '.dsh'), 'native-workflows');
   const store = createStore({ dataRoot });
-  const service = createNativeAgentService(ctx, store, { ...settings, dataRoot });
+  const extractionModels = createExtractionModels(ctx, {dataRoot});
+  const service = createNativeAgentService(ctx, store, { ...settings, dataRoot, getExtractionModel:() => extractionModels.selection() });
   const monitoring = createNativeMonitoring({ dataRoot, store, learningService: service, sessionQuery: ctx.sessionQuery });
   const recovery = createNativeRecoveryService(ctx, { store, learningService: service, dataRoot });
   const execution = createNativeExecutionService(ctx, store, { dataRoot, reason: (...args) => recovery.reason(...args) });
@@ -46,6 +53,7 @@ export function apply(ctx, config) {
   ctx.effect(() => () => recovery.dispose());
   ctx.effect(() => () => uiRuns.dispose());
   if (settings.enableCapabilities) {
+    ctx.effect(() => ctx.systemPrompt.section({name:'native-capability-invocation',order:850,text:'When capability_run is available and an advertised executable SkillX or workflow covers the user goal, use this invocation path: load the root skill contract, supply its inputs to capability_run, and consume the validated output and execution receipt. The executor resolves declared dependencies, checks prerequisites and handles bounded recovery. Load implementation or CLI documentation only to resolve a concrete external blocker reported by that call; root invocation needs only its public contract. For final fields missing from the returned output, combine necessary read-only checks into one tool call. Report the verified result concisely. A blocked call preserves completed steps; resume only the unfinished operation identified by its receipt.'}));
     ctx.effect(() => registerNativeSkills(ctx, store));
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'capability_run',
@@ -108,6 +116,8 @@ export function apply(ctx, config) {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > 8192) throw new Error('Request too large'); }
         return raw ? JSON.parse(raw) : {};
       };
+      if (req.method === 'GET' && route === 'extraction-model') return send(200, await extractionModels.get());
+      if (req.method === 'POST' && route === 'extraction-model') return send(200, await extractionModels.save(await readBody()));
       if (req.method === 'POST' && route === 'runs') return send(202, await uiRuns.start(await readBody()));
       if (req.method === 'GET' && route === 'runs') return send(200, await uiRuns.list(url.searchParams.get('name')));
       if (req.method === 'GET' && /^runs\/[^/]+$/.test(route)) { const job = await uiRuns.get(route.split('/')[1]); return job ? send(200, job) : send(404, { error: 'Execution not found' }); }
@@ -120,7 +130,10 @@ export function apply(ctx, config) {
       if (req.method === 'GET' && route.startsWith('monitoring/metrics/')) return send(200, await monitoring.metric(route.slice('monitoring/metrics/'.length), url.searchParams));
       if (req.method === 'GET' && route === 'monitoring/sessions') return send(200, await monitoring.sessions(url.searchParams));
       if (req.method === 'GET' && route.startsWith('monitoring/records/')) return send(200, await monitoring.records(route.slice('monitoring/records/'.length), url.searchParams));
-      if (req.method === 'GET' && route === 'runtime') return send(200, { mode: 'native-agent', dataRoot, enableCapabilities: settings.enableCapabilities });
+      if (req.method === 'GET' && route === 'runtime') return send(200, { mode: 'native-agent', dataRoot, enableCapabilities: settings.enableCapabilities, generationPolicy: { revision:'contract-invocation-v13', budgetMode:'adaptive-estimate', totalTimeoutMs:settings.totalTimeoutMs, maxTotalTokens:settings.maxTotalTokens, maxOutputTokens:settings.maxOutputTokens, maxRequestOutputTokens:settings.maxRequestOutputTokens, maxSteps:settings.maxSteps, maxTotalSteps:settings.maxTotalSteps, maxRepairAttempts:settings.maxRepairAttempts, maxRepeatedFailures:settings.maxRepeatedFailures } });
+      if (req.method === 'POST' && route === 'homepage/order') {
+        const body = await readBody(); return send(200, await store.setHomeOrder(body.names));
+      }
       if (req.method === 'GET' && route === 'catalog') {
         const [capabilities, workflows] = await Promise.all([store.list('skill', { includeDisabled: true }), store.list('workflow', { includeDisabled: true })]);
         return send(200, { capabilities, workflows });
@@ -128,6 +141,10 @@ export function apply(ctx, config) {
       if (req.method === 'GET' && route.startsWith('entries/')) {
         const entry = await store.get(decodeURIComponent(route.slice('entries/'.length)), { includeDisabled: true });
         return entry ? send(200, { ...entry, digest: digest(entry) }) : send(404, { error: 'Capability not found' });
+      }
+      if (req.method === 'POST' && /^entries\/[^/]+\/homepage$/.test(route)) {
+        const entryName = decodeURIComponent(route.split('/')[1]);
+        const body = await readBody(); return send(200, await store.setShowOnHome(entryName, body.showOnHome));
       }
       if (req.method === 'POST' && /^entries\/[^/]+\/availability$/.test(route)) {
         const entryName = decodeURIComponent(route.split('/')[1]);
@@ -140,7 +157,7 @@ export function apply(ctx, config) {
       }
       if (req.method === 'POST' && ['extract', 'optimize'].includes(route)) {
         const body = await readBody();
-        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, operation: route, reviewFindings: body.reviewFindings });
+        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, operation: route, reviewFindings: body.reviewFindings, resumeTaskId:body.resumeTaskId, validateOnly:body.validateOnly });
         return send(202, task);
       }
       if (req.method === 'GET' && route === 'status') {

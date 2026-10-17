@@ -12,6 +12,7 @@ const payload = ${JSON.stringify(payload)};
 const trace = []; const violations = []; let cursor = 0;
 const dispatch = async (channel, request) => {
   trace.push({channel, request});
+  if (channel === 'capability' && (!request || !Object.hasOwn(request,'input') || Object.keys(request).some(key=>!['name','input'].includes(key)))) { violations.push('INVALID_REQUEST_ENVELOPE'); throw new Error('INVALID_REQUEST_ENVELOPE: capabilities.run accepts {name,input}'); }
   const mock = payload.test.calls[cursor++];
   if (!mock || mock.channel !== channel || mock.name !== request.name) { violations.push('UNEXPECTED_DISPATCH'); throw new Error('UNEXPECTED_DISPATCH:' + channel + ':' + request.name); }
   for (const check of mock.assertions || []) {

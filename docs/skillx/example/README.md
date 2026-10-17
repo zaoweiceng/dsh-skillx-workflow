@@ -1,8 +1,5 @@
 # SkillX 示例
 
-| 目录 | 内容 |
-|---|---|
-| [demo](demo/README.md) | 原有 Guide-only 编写参考：说明、清单、Schema 和设计材料 |
-| [tested-v2](tested-v2/README.md) | DSH 原生 Agent 生成的实测工作流 v2 与配套 SkillX v1 快照 |
+[实测能力 tested-v2](tested-v2/README.md) 保存 DSH 原生 Agent 生成的工作流 v2 与配套 SkillX v1 修订快照，可对照输入输出契约、执行程序和版本证据。
 
-两类示例分别保存。文档及示例中出现的本地用户名统一以 `USER` 替代；使用时替换为自己的路径。实测快照不因放入此目录而自动安装。
+示例中的本地用户名以 `USER` 表示，查看和复现时替换为自己的路径。实测环境和关联材料见示例说明。

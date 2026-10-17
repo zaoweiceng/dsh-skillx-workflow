@@ -1,6 +1,6 @@
 # DSH 原生执行契约
 
-本文描述当前实现，不是 skillx.yaml 文件格式，也不代表已实现原始草案全部要求。
+本文描述本插件能力条目的存储结构、公开契约和运行 SDK。
 
 本插件当前支持 DSH 执行契约。它把 SkillX 存成版本化能力条目，并通过 DSH Skill Provider 暴露给模型。
 
@@ -40,7 +40,7 @@
 }
 ```
 
-调用方不能读取内部程序、依赖正文或历史证据。它只需要按 `inputSchema` 传入 JSON，并使用经过 `outputSchema` 校验的结果。
+调用方按 `inputSchema` 传入 JSON，使用经过 `outputSchema` 校验的结果；实现程序、依赖和历史证据由插件内部管理。
 
 ## 私有能力条目
 
@@ -75,8 +75,8 @@
 
 当前实现约束：
 
-- `language` 固定为 `typescript`，但程序必须是普通 JavaScript async function body，不能使用 TypeScript 专有语法。
-- `program` 最大 64 KiB，发布前只做解析校验，不在生成阶段执行业务动作。
+- `language` 固定为 `typescript`，`program` 使用普通 JavaScript async function body 语法。
+- `program` 最大 64 KiB，发布前经过解析校验和使用模拟工具响应的隔离验收。
 - `inputSchema` 和 `outputSchema` 最大 64 KiB，最大深度 32，必须是有限无环 JSON。
 - 输入 Schema 必须是对象根；输出 Schema 使用 DSH 支持的 JSON Schema 子集。
 - 程序返回值必须通过输出 Schema 校验，超出输出大小上限会失败。
@@ -134,4 +134,4 @@ const capabilities = Object.freeze({
 }
 ```
 
-完整事件、工具调用、内部实现摘要、恢复记录和用量保存在私有执行目录中。公开回执用于说明这次输出来自哪个能力版本，不能被解释为外部状态永久有效。
+完整事件、工具调用、内部实现摘要、恢复记录和用量保存在私有执行目录中。公开回执记录本次输出的能力版本和摘要；外部状态以实际观察时间和条件为准。

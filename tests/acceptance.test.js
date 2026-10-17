@@ -4,12 +4,12 @@ import { runAcceptance, validateAcceptance } from '../src/acceptance.js';
 const schema={type:'object',properties:{mode:{type:'string'}},additionalProperties:false};
 const outputSchema={type:'object',properties:{status:{type:'string'},value:{type:'integer'}},required:['status'],additionalProperties:false};
 const makeCase=(id,input,calls,status)=>({id,covers:[id],input,calls,expect:{assertions:[{path:'/status',op:'eq',value:status}]}});
-const suite={contracts:[{name:'lookup',inputSchema:schema,outputSchema,outcomePath:'/status',successValues:['ok'],limitations:'Simulation proves response handling, not external service reality.',cases:[
+const suite={contracts:[{name:'lookup',inputSchema:schema,outputSchema,outcomePath:'/status',successValues:['ok','empty'],limitations:'Simulation proves response handling, not external service reality.',cases:[
  makeCase('success',{},[{channel:'tool',name:'query',result:{count:1}}],'ok'),
  makeCase('defaults',{},[{channel:'tool',name:'query',result:{count:1}}],'ok'),
  makeCase('failure',{mode:'failure'},[{channel:'tool',name:'query',error:'unavailable'}],'unknown'),
  makeCase('empty',{mode:'empty'},[{channel:'tool',name:'query',result:{count:0}}],'empty'),
- makeCase('boundary',{mode:'boundary'},[{channel:'tool',name:'query',result:{count:-1}}],'unknown'),
+ {...makeCase('boundary',{mode:"bad ' ; $(data)"},[{channel:'tool',name:'query',assertions:[{path:'/name',op:'eq',value:'query'}],result:{count:-1}}],'unknown'),covers:['boundary','failure']},
 ]}],withdrawn:[]};
 const good=`try {const result=await tools.call({name:'query',arguments:{}}); return {status:result.count>0?'ok':result.count===0?'empty':'unknown'};} catch {return {status:'unknown'};}`;
 const candidate=program=>({name:'lookup',execution:{language:'typescript',inputSchema:schema,outputSchema,program}});
