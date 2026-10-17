@@ -529,6 +529,11 @@ export function createNativeAgentService(ctx, store, { dataRoot, timeoutMs = 600
                 if (phase !== 'build') throw new Error('Planning cannot submit executable candidates');
                 if (staged) throw new Error('Candidates already submitted; finish this turn');
                 if (skipReason?.trim()) { staged = { candidates:[], reuseNames:[], skipReason }; return {skipped:true,published:false,instruction:'Finish now.'}; }
+                if (buildDraft && (candidates !== undefined || programEdits !== undefined)) {
+                  task.fullDraftSubmissionsAvoided=(task.fullDraftSubmissionsAvoided || 0)+1;
+                  await persist(task);
+                  return {accepted:false,published:false,draftDigest:acceptanceDigest(buildDraft),candidates:buildDraft.candidates.map((candidate,index)=>({name:candidate.name,path:'/candidates/'+index})),instruction:'The current saved draft is authoritative and may include accepted native repairs. Read only the failed candidate program field, then submit draftEdits with this exact digest. Full candidate resubmissions cannot replace this draft.'};
+                }
                 if (useDraft) {
                   if (!buildDraft || draftDigest !== acceptanceDigest(buildDraft) || candidates !== undefined || draftEdits !== undefined || programEdits !== undefined || reuseNames !== undefined) throw new Error('useDraft requires an exact draftDigest and no other submission');
                   candidates=structuredClone(buildDraft.candidates);reuseNames=structuredClone(buildDraft.reuseNames || []);
@@ -625,7 +630,7 @@ export function createNativeAgentService(ctx, store, { dataRoot, timeoutMs = 600
                 if (!acceptanceReceipt.passed) {
                   const failures=acceptanceReceipt.results.filter(result=>!result.passed);
                   await failedSubmission(phase, SUBMIT, Object.assign(new Error('Implementation does not pass frozen acceptance'), { code:'IMPLEMENTATION_ACCEPTANCE_FAILED', issues:failures.map(result=>({code:'ACCEPTANCE_CASE_FAILED',candidate:result.name,caseId:result.caseId,path:'/candidates/'+candidates.findIndex(c=>c.name===result.name)+'/execution/program',message:'Repair implementation against immutable expectations'})) }));
-                  return {accepted:false,published:false,draftDigest:acceptanceDigest(buildDraft),receipt:{passed:false,suiteDigest:acceptanceReceipt.suiteDigest,candidateDigest:acceptanceReceipt.candidateDigest,
+                  return {accepted:false,published:false,draftDigest:acceptanceDigest(buildDraft),hostRepairs:task.nativeRepairs?.filter(repair=>repair.applied).map(repair=>({name:repair.name,passed:repair.passed,programPath:'/candidates/'+buildDraft.candidates.findIndex(candidate=>candidate.name===repair.name)+'/execution/program'})),receipt:{passed:false,suiteDigest:acceptanceReceipt.suiteDigest,candidateDigest:acceptanceReceipt.candidateDigest,
                     summary:{total:acceptanceReceipt.results.length,failed:failures.length},results:failures.slice(0,3).map(failureSummary),moreFailures:failures.length>3},
                     instruction:'Repair against these immutable failures and resubmit. Full diagnostics were persisted; if moreFailures, read_native_acceptance name=__failures__ and follow fragments. Do not alter expectations. If no useful verifiable implementation remains, submit skipReason; never force publication.'};
                 }
@@ -681,11 +686,23 @@ export function createNativeAgentService(ctx, store, { dataRoot, timeoutMs = 600
             }
             if(records.length) {reviewedSources.add(item.sessionId);evidence.push({sessionId:item.sessionId,sourceDigest:task.sourceDigests[item.sessionId],records});}
           }
+          if (contractPhase || phase === 'build') {
+            const names=new Set(evidence.flatMap(source=>source.records).filter(record=>record.type==='toolEvidence').map(record=>record.value?.name).filter(Boolean));
+            const presets=ctx.get?.('agentPresets') ?? ctx.agentPresets;
+            const lease=await presets.acquireScope('standard');
+            try {
+              for(const name of names) {
+                if(nativeToolDefinitions.has(name)) continue;
+                const definition=ctx.tools.get(name,lease.key);
+                if(definition) nativeToolDefinitions.set(name,{name:definition.name,description:definition.description,parameters:definition.parameters,outputSchema:definition.output.schema,contractSource:'current-standard-preset'});
+              }
+            } finally {await lease[Symbol.asyncDispose]();}
+          }
           prompt.nativeTools=[];let toolBytes=0;
           for(const [name,contract] of nativeToolDefinitions) {
             const bytes=Buffer.byteLength(JSON.stringify(contract));
             if(toolBytes+bytes>16384) continue;
-            toolBytes+=bytes;prompt.nativeTools.push(contract);context.remember('tool:'+name,contract);
+            toolBytes+=bytes;prompt.nativeTools.push(contract);nativeToolContracts.set(name,contract.outputSchema);context.remember('tool:'+name,contract);
           }
           if(contractPhase) {prompt.acceptanceProtocol=acceptanceProtocol;context.remember('acceptance:__protocol__:',acceptanceProtocol);}
           prompt.sourceEvidence=evidence;

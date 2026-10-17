@@ -9,7 +9,7 @@ const candidate = new Script('(async function(input, tools, capabilities) {\n\"u
 context.__candidate = candidate;
 const setup = `(async()=>{const candidate = globalThis.__candidate; delete globalThis.__candidate;
 const payload = ${JSON.stringify(payload)};
-const trace = []; const violations = []; let cursor = 0;
+const trace = []; const violations = []; const requestFailures = []; let cursor = 0;
 const dispatch = async (channel, request) => {
   trace.push({channel, request});
   if (channel === 'capability' && (!request || !Object.hasOwn(request,'input') || Object.keys(request).some(key=>!['name','input'].includes(key)))) { violations.push('INVALID_REQUEST_ENVELOPE'); throw new Error('INVALID_REQUEST_ENVELOPE: capabilities.run accepts {name,input}'); }
@@ -17,7 +17,7 @@ const dispatch = async (channel, request) => {
   if (!mock || mock.channel !== channel || mock.name !== request.name) { violations.push('UNEXPECTED_DISPATCH'); throw new Error('UNEXPECTED_DISPATCH:' + channel + ':' + request.name); }
   for (const check of mock.assertions || []) {
     const value = check.path.split('/').slice(1).reduce((v,k)=>v?.[k.replace(/~1/g,'/').replace(/~0/g,'~')], request);
-    if (check.op === 'eq' ? JSON.stringify(value)!==JSON.stringify(check.value) : check.op === 'contains' ? !String(value).includes(check.value) : true) { violations.push('REQUEST_ASSERTION_FAILED'); throw new Error('REQUEST_ASSERTION_FAILED:'+check.path); }
+    if (check.op === 'eq' ? JSON.stringify(value)!==JSON.stringify(check.value) : check.op === 'contains' ? !String(value).includes(check.value) : true) { violations.push('REQUEST_ASSERTION_FAILED'); requestFailures.push({index:cursor-1,channel,name:request.name,path:check.path,op:check.op,expected:check.value,...(value === undefined ? {missing:true} : {actual:value})}); throw new Error('REQUEST_ASSERTION_FAILED:'+check.path); }
   }
   if (mock.error) throw new Error(mock.error);
   return JSON.parse(JSON.stringify(mock.result));
@@ -25,8 +25,8 @@ const dispatch = async (channel, request) => {
 const input = payload.test.input;
 const tools = {call: request => dispatch('tool', request)};
 const capabilities = {run: request => dispatch('capability',request), reason: request => dispatch('reason', {...request,name:'reason'})};
-try { const output = await candidate(input, tools, capabilities); return JSON.stringify({output,trace,violations,remaining:payload.test.calls.length-cursor}); }
-catch(error){ return JSON.stringify({error:String(error.message),trace,violations,remaining:payload.test.calls.length-cursor}); }})()`;
+try { const output = await candidate(input, tools, capabilities); return JSON.stringify({output,trace,violations,requestFailures,remaining:payload.test.calls.length-cursor}); }
+catch(error){ return JSON.stringify({error:String(error.message),trace,violations,requestFailures,remaining:payload.test.calls.length-cursor}); }})()`;
 try {
   const result = await new Script(setup).runInContext(context, { timeout: 1000 });
   process.stdout.write(result);
