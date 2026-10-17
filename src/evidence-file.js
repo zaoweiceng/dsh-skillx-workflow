@@ -13,7 +13,7 @@ const recordsOf = evidence => {
   return records.every(record => Number.isSafeInteger(seq(record))) ? records.sort((a, b) => seq(a) - seq(b)) : records;
 };
 
-/** Frozen JSONL plus byte offsets: no transcript is placed in the author prompt. */
+/** Frozen JSONL plus byte offsets for bounded complete-record delivery and selective reads. */
 export async function writeEvidenceFile(path, evidence) {
   const file = await open(path, 'wx', 0o600);
   const index = [];
