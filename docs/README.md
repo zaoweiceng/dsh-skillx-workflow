@@ -10,7 +10,7 @@
 | [SkillX 示例](skillx/example/README.md) | 新接入开发者 | 原生 Agent 生成的实测能力修订快照 |
 | [插件设计](design.md) | 插件维护者 | DSH Agent、存储、运行、恢复和前端的实现方式 |
 | [运行机制](operation.md) | 使用者、维护者 | SkillX 的提取、草稿续跑、成本控制、执行、恢复和优化 |
-| [测试归档](tests/2026-10-14/README.md) | 评估者 | 启用 skillx 前后的耗时、Token 和模型调用对比 |
+| [测试归档](tests/README.md) | 评估者 | DeepSeek 与 GPT-5.5 各自启用 skillx 前后的耗时、Token、结果质量和提取成本 |
 
 ## 项目说明
 

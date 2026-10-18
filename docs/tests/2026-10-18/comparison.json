@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-18",
+  "model": {
+    "name": "gpt-5.5",
+    "reasoningEffort": "medium"
+  },
+  "task": "Create a branch, commit selected files, push to a local bare remote, and create a mock merge request.",
+  "conditions": {
+    "pairs": 3,
+    "order": [
+      "1-on",
+      "1-off",
+      "2-off",
+      "2-on",
+      "3-on",
+      "3-off"
+    ],
+    "execution": "serial",
+    "initialGitState": "identical HEAD, diff, and pending paths",
+    "inputs": "same business values; isolated filesystem paths differ",
+    "modelProvider": "DSH model provider supporting native tool dispatch and usage reporting",
+    "on": "enabled SkillX discovery and capability_run; exact existing workflow reused",
+    "off": "disabled SkillX discovery and capability_run; ordinary skills and native tools available",
+    "cache": "not manually cleared",
+    "tokenAccounting": "DSH-reported uncached input + cache reads + output",
+    "scope": "isolated repositories, local bare origins, mocked merge requests"
+  },
+  "trials": [
+    {
+      "pair": 1,
+      "arm": "on",
+      "seconds": 15.569,
+      "requests": 3,
+      "usage": {
+        "inputTokens": 44701,
+        "cacheReadTokens": 23040,
+        "outputTokens": 620,
+        "totalTokens": 68361
+      },
+      "toolCalls": {
+        "skill": 1,
+        "capability_run": 1
+      },
+      "qualityPassed": true,
+      "deliveryPassed": true,
+      "pathPrefixHonored": true
+    },
+    {
+      "pair": 1,
+      "arm": "off",
+      "seconds": 83.54,
+      "requests": 8,
+      "usage": {
+        "inputTokens": 222511,
+        "cacheReadTokens": 23040,
+        "outputTokens": 4310,
+        "totalTokens": 249861
+      },
+      "toolCalls": {
+        "skill": 2,
+        "todo_write": 7,
+        "bash": 5
+      },
+      "qualityPassed": false,
+      "deliveryPassed": true,
+      "pathPrefixHonored": false
+    },
+    {
+      "pair": 2,
+      "arm": "on",
+      "seconds": 18.041,
+      "requests": 3,
+      "usage": {
+        "inputTokens": 44706,
+        "cacheReadTokens": 23040,
+        "outputTokens": 571,
+        "totalTokens": 68317
+      },
+      "toolCalls": {
+        "skill": 1,
+        "capability_run": 1
+      },
+      "qualityPassed": true,
+      "deliveryPassed": true,
+      "pathPrefixHonored": true
+    },
+    {
+      "pair": 2,
+      "arm": "off",
+      "seconds": 66.84,
+      "requests": 6,
+      "usage": {
+        "inputTokens": 126428,
+        "cacheReadTokens": 46080,
+        "outputTokens": 3489,
+        "totalTokens": 175997
+      },
+      "toolCalls": {
+        "skill": 1,
+        "todo_write": 4,
+        "bash": 2
+      },
+      "qualityPassed": false,
+      "deliveryPassed": true,
+      "pathPrefixHonored": false
+    },
+    {
+      "pair": 3,
+      "arm": "on",
+      "seconds": 16.615,
+      "requests": 3,
+      "usage": {
+        "inputTokens": 44702,
+        "cacheReadTokens": 23040,
+        "outputTokens": 680,
+        "totalTokens": 68422
+      },
+      "toolCalls": {
+        "skill": 1,
+        "capability_run": 1
+      },
+      "qualityPassed": true,
+      "deliveryPassed": true,
+      "pathPrefixHonored": true
+    },
+    {
+      "pair": 3,
+      "arm": "off",
+      "seconds": 72.754,
+      "requests": 8,
+      "usage": {
+        "inputTokens": 172087,
+        "cacheReadTokens": 61440,
+        "outputTokens": 4434,
+        "totalTokens": 237961
+      },
+      "toolCalls": {
+        "skill": 1,
+        "todo_write": 4,
+        "bash": 5
+      },
+      "qualityPassed": false,
+      "deliveryPassed": true,
+      "pathPrefixHonored": false
+    }
+  ],
+  "aggregate": {
+    "on": {
+      "meanSeconds": 16.741666666666667,
+      "medianSeconds": 16.615,
+      "totalSeconds": 50.224999999999994,
+      "meanTokens": 68366.66666666667,
+      "meanRequests": 3,
+      "usageTotal": {
+        "inputTokens": 134109,
+        "cacheReadTokens": 69120,
+        "outputTokens": 1871,
+        "totalTokens": 205100
+      },
+      "deliverySuccesses": 3,
+      "allRequirementsSuccesses": 3,
+      "pathPrefixHonored": 3
+    },
+    "off": {
+      "meanSeconds": 74.378,
+      "medianSeconds": 72.754,
+      "totalSeconds": 223.13400000000001,
+      "meanTokens": 221273,
+      "meanRequests": 7.333333333333333,
+      "usageTotal": {
+        "inputTokens": 521026,
+        "cacheReadTokens": 130560,
+        "outputTokens": 12233,
+        "totalTokens": 663819
+      },
+      "deliverySuccesses": 3,
+      "allRequirementsSuccesses": 0,
+      "pathPrefixHonored": 0
+    }
+  },
+  "reduction": {
+    "secondsPercent": 77.49110400028682,
+    "tokensPercent": 69.10302356515857,
+    "tokensSavedPerUse": 152906.3333333333
+  },
+  "workflowExecutions": [
+    {
+      "pair": 1,
+      "seconds": 1.053,
+      "steps": 6,
+      "usage": []
+    },
+    {
+      "pair": 2,
+      "seconds": 0.719,
+      "steps": 6,
+      "usage": []
+    },
+    {
+      "pair": 3,
+      "seconds": 0.951,
+      "steps": 6,
+      "usage": []
+    }
+  ],
+  "totalReportedTokens": 868919,
+  "extractionSamples": {
+    "final": {
+      "seconds": 127.348,
+      "requests": 6,
+      "usage": {
+        "inputTokens": 104695,
+        "cacheReadTokens": 46080,
+        "outputTokens": 15269,
+        "totalTokens": 166044
+      },
+      "checks": 18,
+      "physicalPassed": true,
+      "unattended": true
+    },
+    "baselines": {
+      "DeepSeek": {
+        "seconds": 1891.506,
+        "totalTokens": 326295,
+        "totalSteps": 8,
+        "model": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "reasoningEffort": "low",
+          "maxTokens": 12000
+        }
+      },
+      "GPT_before": {
+        "seconds": 163.817,
+        "totalTokens": 239207,
+        "totalSteps": 7,
+        "model": {
+          "provider": "traex",
+          "model": "gpt-5.5",
+          "reasoningEffort": "medium",
+          "maxTokens": 12000
+        }
+      }
+    },
+    "improvement": {
+      "DeepSeek": {
+        "timePercent": 93.27,
+        "tokensPercent": 49.11
+      },
+      "GPT_before": {
+        "timePercent": 22.26,
+        "tokensPercent": 30.59
+      }
+    }
+  },
+  "quality": {
+    "delivery": "6/6; exact selected files, bodies, local pushed SHA and MR results",
+    "pathPrefix": "on 3/3; off 0/3; existing Node still permits delivery",
+    "sourceUnchanged": true
+  },
+  "interpretation": "Descriptive samples of a single task. Extraction is a prior successful single-run sample with independently generated acceptance cases. Monetary cost depends on provider pricing and cache accounting."
+}

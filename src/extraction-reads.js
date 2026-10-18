@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { acceptanceDigest } from './acceptance.js';
 
 export function selectDraftField(value, path) {
@@ -14,7 +15,9 @@ export function selectDraftField(value, path) {
 /** Phase-local delivery tracking and advisory request accounting. */
 export function createExtractionReads(task, persist) {
   const seen = new Set();
-  const remember = (identity, value) => {
+  const fields = new Map();
+  const remember = (identity, value, retain = false) => {
+    if (retain) { fields.set(identity, JSON.parse(JSON.stringify(value))); fields.delete(identity+':fragments'); }
     const key=identity+':'+acceptanceDigest(value);
     if (!seen.has(key)) {
       seen.add(key);
@@ -23,7 +26,34 @@ export function createExtractionReads(task, persist) {
   };
   return {
     remember,
-    beginPhase() { seen.clear(); },
+    beginPhase() { seen.clear(); fields.clear(); },
+    fields() { return [...fields].map(([identity,value])=>({identity,value})); },
+    releaseUnretained(prefix) {
+      for(const key of seen) if(key.startsWith(prefix) && !fields.has(key.slice(0,-65))) seen.delete(key);
+    },
+    fragment(identity, value) {
+      const key=identity+':fragments';
+      const parts=fields.get(key) || [];
+      fields.set(key,[...parts.filter(part=>part.partCursor!==value.partCursor),value]);
+    },
+    invalidateDraft(draft) {
+      const stale=new Set();
+      for(const identity of fields.keys()) {
+        if(!identity.startsWith('acceptance:') || identity.startsWith('acceptance:__protocol__:')) continue;
+        const match=identity.match(/^acceptance:([^:]+):(\/.*)$/);
+        const collection=match && /^\/(?:execution|dependencies)(?:\/|$)/.test(match[2]) ? draft.candidates : draft.contracts;
+        const item=match && Array.isArray(collection) && collection.find(item=>item?.name===match[1]);
+        try {
+          const current=selectDraftField(item,match?.[2]);
+          if(acceptanceDigest(current)!==acceptanceDigest(fields.get(identity))) stale.add(identity);
+        } catch { stale.add(identity); }
+      }
+      for(const identity of stale) {
+        fields.delete(identity);
+        for(const key of seen) if(key.startsWith(identity+':')) seen.delete(key);
+      }
+      for(const key of seen) if(/^acceptance:__(?!protocol__)/.test(key)) seen.delete(key);
+    },
     read(identity, value, continuation = false) {
       // Optional metadata fields must be omitted, not exposed as undefined to DSH.
       value = JSON.parse(JSON.stringify(value));
@@ -33,7 +63,7 @@ export function createExtractionReads(task, persist) {
         task.duplicateReadsAvoided = (task.duplicateReadsAvoided || 0) + 1;
         return {alreadyRead:true,identity,digest,instruction:'Exact data is already in this phase context. Reuse it; do not request the same unchanged field again.'};
       }
-      if (Buffer.byteLength(JSON.stringify(value)) <= 10000) remember(identity,value);
+      if (Buffer.byteLength(JSON.stringify(value)) <= 10000) remember(identity,value,true);
       return value;
     },
     async preflight(session, config) {
@@ -50,4 +80,30 @@ export function createExtractionReads(task, persist) {
       await persist(task); return config;
     },
   };
+}
+
+/** Replace model-visible authoring history with exact host-owned current data. */
+export function replaceExtractionContext(session, value) {
+  const events=session.snapshotEvents();
+  const nodes=[...session.surface.nodes];
+  const start=nodes.findIndex(seq=>!['system/message','developer/message'].includes(events[seq].type));
+  if(start<0) return 0;
+  const replaced=nodes.slice(start);
+  const calls=new Map(events.filter(event=>event.type==='tool/call').map(event=>[event.data.callId,event.data.name]));
+  value.toolFeedback=replaced.flatMap(seq=>{
+    const event=events[seq];if(event.type!=='tool/result') return [];
+    const message=event.data.message;
+    const tool=calls.get(message.toolCallId);
+    const text=message.content.filter(block=>block.type==='text').map(block=>block.text).join('\n');
+    let result;try {result=JSON.parse(text);} catch {if(message.isError) return [{tool,error:text}];return [];}
+    if(message.isError || result?.fieldNotFound || result?.fieldTooLarge || result?.alreadyRead || result?.unrelated || result?.completeRecord===false) return [{tool,result}];
+    if(['submit_native_acceptance','submit_native_capabilities','submit_native_plan'].includes(tool)) {
+      const {saved,frozen,accepted,unchanged,draftDigest,validatedNames,instruction}=result;
+      return [{tool,result:{saved,frozen,accepted,unchanged,draftDigest,validatedNames,instruction}}];
+    }
+    return [];
+  });
+  const text=JSON.stringify(value);
+  session.append('user/message',{id:randomUUID(),role:'user',source:{kind:'dsh-skillx-workflow-request'},content:[{type:'text',text}]},{surfaceOp:{op:'replace',startSeq:replaced[0],endSeq:replaced.at(-1)},sourceEventSeqs:replaced});
+  return Buffer.byteLength(text);
 }

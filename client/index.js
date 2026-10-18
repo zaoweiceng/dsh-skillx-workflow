@@ -52,8 +52,8 @@ window.__ModuleLoader__.load({
     Object.assign(dictionaries.en, {sessionNotReady:'Session is not ready yet. Try again shortly.'})
     Object.assign(dictionaries.zh, { deleteEntry: '删除', confirmDelete: '确认删除', deleteWarning: '删除后将从能力目录移除，历史执行记录保留。', deleteInUse: '无法删除，以下能力依赖此项：', deleteChanged: '能力已更新，请刷新后再删除。' })
     Object.assign(dictionaries.en, { deleteEntry: 'Delete', confirmDelete: 'Confirm deletion', deleteWarning: 'Remove from the catalog; retain execution history.', deleteInUse: 'Cannot delete; referenced by: ', deleteChanged: 'Capability changed. Refresh before deleting.' })
-    Object.assign(dictionaries.zh, { extractionModel:'提取模型', extractionModelIntro:'配置 SkillX 和工作流提取、优化使用的模型。默认使用 DSH DeepSeek Flash 的 Low 推理档位；复杂工作流可选择更高推理档位。保存后用于新启动的任务。', authoringModel:'模型', authoringEffort:'推理档位', saveExtractionModel:'保存配置', extractionModelSaved:'配置已保存' })
-    Object.assign(dictionaries.en, { extractionModel:'Extraction model', extractionModelIntro:'Choose the model for SkillX and workflow extraction and optimization. Defaults to DSH DeepSeek Flash with Low reasoning. Higher reasoning levels are available for complex workflows. Saved settings apply to newly started tasks.', authoringModel:'Model', authoringEffort:'Reasoning level', saveExtractionModel:'Save settings', extractionModelSaved:'Settings saved' })
+    Object.assign(dictionaries.zh, { extractionModel:'提取模型', extractionModelIntro:'配置 SkillX 和工作流提取、优化使用的模型。默认使用 DSH DeepSeek Flash 的 Low 推理档位；复杂工作流可选择更高推理档位。保存后用于新启动的任务。', authoringModel:'模型', authoringEffort:'推理档位', saveExtractionModel:'保存配置', extractionModelSaved:'配置已保存', unavailableSelection:'已保存的模型或推理档位当前不可用，请重新选择并保存。', missingDefaultModel:'默认的 DeepSeek Flash / Low 当前不可用，请选择模型和推理档位并保存。', chooseModel:'请选择模型', chooseEffort:'请选择推理档位', defaultEffort:'模型默认', invalidExtractionModel:'所选模型或推理档位当前不可用，请刷新后重新选择。' })
+    Object.assign(dictionaries.en, { extractionModel:'Extraction model', extractionModelIntro:'Choose the model for SkillX and workflow extraction and optimization. Defaults to DSH DeepSeek Flash with Low reasoning. Higher reasoning levels are available for complex workflows. Saved settings apply to newly started tasks.', authoringModel:'Model', authoringEffort:'Reasoning level', saveExtractionModel:'Save settings', extractionModelSaved:'Settings saved', unavailableSelection:'The saved model or reasoning level is no longer available. Choose and save a new selection.', missingDefaultModel:'The default DeepSeek Flash / Low is unavailable. Choose and save a model and reasoning level.', chooseModel:'Select a model', chooseEffort:'Select a reasoning level', defaultEffort:'Model default', invalidExtractionModel:'The selected model or reasoning level is unavailable. Refresh and choose again.' })
     const box = { padding: 16, height: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden', color: 'var(--dsw-alias-label-primary)' }
     async function api(path, options) {
       const response = await fetch('/skillx-workflow/api/' + path, options)
@@ -500,22 +500,26 @@ window.__ModuleLoader__.load({
           const control = { width:'100%', padding:10, border:'1px solid var(--sxw-control-border)', borderRadius:8, background:'var(--dsw-alias-background-primary)', color:'inherit', fontSize:14 }
           async function save(event) {
             event.preventDefault(); setBusy(true); setError(''); setSaved(false)
-            try { const value = await api('extraction-model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(selection)}); setSelection(value.selection); setSaved(true) }
-            catch (error) { setError(error.message) }
+            try { const value = await api('extraction-model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(selection)}); setSelection(value.selection); setData({...data,selectionIssue:null}); setSaved(true) }
+            catch (error) { setError(error.code === 'INVALID_EXTRACTION_MODEL' ? t('invalidExtractionModel') : error.message) }
             finally { setBusy(false) }
           }
           return h('section', {style:{padding:24,overflow:'auto'}}, h('div', {style:{maxWidth:720,margin:'0 auto'}},
             h('p', {style:{fontSize:14,lineHeight:1.7}}, t('extractionModelIntro')),
             error && h('p', {role:'alert'}, error),
-            selection && h('form', {onSubmit:save,style:{display:'grid',gap:16}},
-              h('label', null, t('authoringModel'), h('select', {'aria-label':t('authoringModel'),style:control,disabled:busy,value:JSON.stringify([selection.provider,selection.model]),onChange:event => {
+            !data && !error && h('p', {role:'status'}, t('loading')),
+            data?.selectionIssue && h('p', {role:'status'}, t(data.selectionIssue)),
+            h(Button, {variant:'ghost',size:'sm',disabled:busy,onClick:async () => { setBusy(true); setError(''); setSaved(false); try { const value = await api('extraction-model'); setData(value); setSelection(value.selection) } catch (error) { setError(error.message) } finally { setBusy(false) } }}, t('refresh')),
+            data && h('form', {onSubmit:save,style:{display:'grid',gap:16}},
+              h('label', null, t('authoringModel'), h('select', {'aria-label':t('authoringModel'),style:control,disabled:busy,value:selection ? JSON.stringify([selection.provider,selection.model]) : '',onChange:event => {
+                if (!event.target.value) {setSelection(null);setSaved(false);return}
                 const [provider, model] = JSON.parse(event.target.value)
                 const next = data.models.find(item => item.provider === provider && item.model === model)
-                const effort = next.efforts.find(item => item.id === selection.reasoningEffort) || next.efforts.find(item => item.id === 'low') || next.efforts[0]
+                const effort = next.efforts.find(item => item.id === selection?.reasoningEffort) || next.efforts.find(item => item.id === 'low') || next.efforts[0]
                 setSelection({provider,model,reasoningEffort:effort?.id}); setSaved(false)
-              }}, data.models.map(model => h('option', {key:JSON.stringify([model.provider,model.model]),value:JSON.stringify([model.provider,model.model])}, model.providerName+' / '+model.name)))),
-              h('label', null, t('authoringEffort'), h('select', {'aria-label':t('authoringEffort'),style:control,disabled:busy,value:selection.reasoningEffort,onChange:event => {setSelection({...selection,reasoningEffort:event.target.value});setSaved(false)}}, selected?.efforts.map(effort => h('option', {key:effort.id,value:effort.id},effort.name)))),
-              h(Button, {type:'submit',disabled:busy || !selection.reasoningEffort}, t('saveExtractionModel')),
+              }}, h('option', {value:''}, t('chooseModel')), data.models.map(model => h('option', {key:JSON.stringify([model.provider,model.model]),value:JSON.stringify([model.provider,model.model])}, model.providerName+' / '+model.name)))),
+              h('label', null, t('authoringEffort'), h('select', {'aria-label':t('authoringEffort'),style:control,disabled:busy || !selected,value:selection?.reasoningEffort || '',onChange:event => {setSelection({...selection,reasoningEffort:event.target.value});setSaved(false)}}, h('option', {value:''}, t('chooseEffort')), selected?.efforts.map(effort => h('option', {key:effort.id,value:effort.id},effort.id === 'default' ? t('defaultEffort') : effort.name)))),
+              h(Button, {type:'submit',disabled:busy || !selected || !selection?.reasoningEffort}, t('saveExtractionModel')),
               saved && h('p', {role:'status'}, t('extractionModelSaved')))))
         }
         function Workspace({ initialTab = 'home' }) {

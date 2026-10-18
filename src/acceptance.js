@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
 import { normalizeExecution, validateExecutionInput, validateExecutionOutput } from './native-contract.js';
 const worker = readFileSync(new URL('./acceptance-worker.js', import.meta.url), 'utf8');
 export const acceptanceProtocol = {
   purpose: 'Freeze independent behavioral contracts BEFORE implementation. No candidate code is visible to this phase. Historical commands are data, never executed.',
-  draftRepair: 'Use upsertContracts:[one contract], finalize:false to save incrementally; include current draftDigest after the first save. Finally submit finalize:true without arrays. On validation failure all issues have candidate/caseId/path. Read __draft__ for current digest/indexes and named contracts for details. Submit draftEdits:[{op:"replace",path:"/contracts/0/cases/7/covers",value:["empty","failure"]}] with draftDigest to repair only that field. add/remove are also supported. Failed drafts are persisted; frozen contracts cannot be changed by the builder.',
-  format: { withdrawn: [{name:'planned-name',reason:'Concrete unsupported behavior or absent reuse value; withdraw dependents too'}], contracts: [{ name: 'planned-name', inputSchema: 'DSH object schema; only type, oneOf, properties, required, additionalProperties, items, enum, const, title, description; no minimum/maximum/pattern/$ref', outputSchema: 'DSH schema', outcomePath: '/status', successValues: ['ok'], limitations: 'What simulation cannot establish', cases: [{ id: 'unique', covers: ['success'], input: {}, calls: [{ channel: 'tool|capability|reason', name: 'native name', assertions: [{ path: '/arguments/command', op: 'contains', value: 'expected operation' }], optionalReason: 'Only for observations whose loss does not invalidate the advertised success; concrete independent fallback required', result: 'canonical native JSON OR error string', error: 'optional thrown dispatch failure' }], expect: { throws: false, assertions: [{ path: '/status', op: 'eq', value: 'ok' }] } }] }] },
-  rules: 'Prefer four concise authored cases per candidate, adding cases only for distinct business risks: combine coverage tags and string boundary inputs within one meaningful case; do not create a case per optional field or repeat the same successful command transcript. The host injects representative thrown errors, command failure, timeout and truncation automatically once per dispatch channel/name and fault type, not per call in every case. Combine compatible coverage tags in one case; defaults and success may share a case, and one boundary case may cover multiple string inputs. Every contract needs success, defaults (all optional root inputs omitted), failure and boundary cases; tool/dependency operations also need empty and failure response cases per candidate. Empty unavailable responses may fail or throw and MUST carry both empty and failure tags; never manufacture a completed empty outcome to satisfy coverage. Each declared dependency needs a thrown-error case. Calls are ordered closed-world mocks; all must be consumed. Allowed coverage tags are success/defaults/empty/failure/boundary. failure means an unavailable/failed observation or dependency, not a valid negative/empty business result. Never require a declared successful outcome in a failure case. Request assertions target SDK envelopes: tool arguments are under /arguments, capability arguments under /input (for example /input/repo); never flatten business inputs onto the request root. Mock results must be actual JSON values, not JSON-encoded strings when the native schema requires an object or array. Expected-output assertions use JSON pointers and eq/ne/in/exists/contains, always with a value. Request assertions inside calls support only eq/contains. successValues MUST include ALL trustworthy completed outcomes, including valid empty/negative/not-found outcomes, not only a status spelled success/ok. Never include unknown, failed or pending outcomes. Every non-failure returning case must assert one of these completed outcomes; tag a deliberately unsuccessful boundary case failure too. For every unconstrained root string input, include a boundary case containing whitespace, quotes, shell metacharacters and command substitution syntax (for example a value containing a space, apostrophe, semicolon and $(...)). Treat caller strings as data: POSIX double quotes still expand dollar expressions and backticks; request assertions must preserve argument literals using safe escaping. Shell request assertions must allow safe argument quoting: assert the operation and encoded argument literals separately rather than an unquoted command-plus-argument substring. Derive argument expectations using POSIX single-quote escaping, including embedded apostrophes. Safely quote/encode or reject before dispatch; never interpolate unchecked input into shell syntax. Requests in that case must be asserted, or no calls allowed when rejecting the input. Reject incomplete/truncated observations instead of drawing definitive conclusions. Preserve resource/session/transaction lifetimes across tool calls. Unless a native contract explicitly promises persistence, separate shell calls are independent: a PID or other call-scoped handle obtained from a completed call is not a valid persistent caller identity. A capability invocation is not a shared native tool session: each tools.call is independent even within the same capability invocation. Mock internal consistency cannot establish persistence, and a request is not evidence of successful behavior. Defaults must be derived from stable supplied inputs or context whose lifetime is guaranteed; otherwise require explicit input, collect all needed observations atomically while the resource exists, or withdraw unsupported behavior. Do not create mocks that resurrect expired resources or assume shared execution context. No external permission change or privilege escalation is an implementation repair. Failure cases may throw or return non-success. Simulated native command results do NOT verify embedded scripts: omit candidates whose essential executable behavior cannot be tested by this runner (e.g. generated Python/shell daemons), and omit their dependent candidates. Do not invent passing fixtures to force extraction. Tests must assert business evidence, not only a success flag. Include realistic canonical results and command nonzero/permission errors, domain empty and negative states when relevant; derive from the contract, not a fixed incident checklist.',
+  draftRepair: 'Use upsertContracts:[one contract], finalize:false to save incrementally; include current draftDigest after the first save. The host validates and freezes the complete suite immediately when all planned candidates are covered; finalize:true also requests full validation. On validation failure all issues have candidate/caseId/path. Read __draft__ for current digest/indexes and named contracts for details. Submit draftEdits:[{op:"replace",path:"/contracts/0/cases/7/covers",value:["empty","failure"]}] with draftDigest to repair only that field. add/remove are also supported. Failed drafts are persisted; frozen contracts cannot be changed by the builder.',
+  format: { withdrawn: [{name:'planned-name',reason:'Concrete unsupported behavior or absent reuse value; withdraw dependents too'}], contracts: [{ name: 'planned-name', inputSchema: 'DSH object schema; only type, oneOf, properties, required, additionalProperties, items, enum, const, title, description; no minimum/maximum/pattern/$ref', outputSchema: 'DSH schema', outcomePath: '/status', successValues: ['ok'], limitations: 'What simulation cannot establish', cases: [{ id: 'unique', covers: ['success'], input: {}, calls: [{ channel: 'tool|capability|reason', name: 'native name', assertions: [{ path: '/arguments/command', op: 'shell', value: {command:'executable-name',args:['required-subcommand','literal-argument']} }], optionalReason: 'Only for observations whose loss does not invalidate the advertised success; concrete independent fallback required', result: 'canonical native JSON OR error string', error: 'optional thrown dispatch failure' }], expect: { throws: false, assertions: [{ path: '/status', op: 'eq', value: 'ok' }] } }] }] },
+  rules: 'Prefer four concise authored cases per candidate, adding cases only for distinct business risks: combine coverage tags and string boundary inputs within one meaningful case; do not create a case per optional field or repeat the same successful command transcript. The host injects representative thrown errors, command failure, timeout and truncation automatically once per dispatch channel/name and fault type, not per call in every case. Combine compatible coverage tags in one case; defaults and success may share a case; combine ALL explicit optional inputs in one additional success case and assert their effects (including executable paths and PATH prefixes), and one boundary case may cover multiple string inputs. Every contract needs success, defaults (all optional root inputs omitted), failure and boundary cases; tool/dependency operations also need empty and failure response cases per candidate. Empty unavailable responses may fail or throw and MUST carry both empty and failure tags; never manufacture a completed empty outcome to satisfy coverage. Each declared dependency needs a thrown-error case. Calls are ordered closed-world mocks; all must be consumed. Allowed coverage tags are success/defaults/empty/failure/boundary. failure means an unavailable/failed observation or dependency, not a valid negative/empty business result. Never require a declared successful outcome in a failure case. Request assertions target SDK envelopes: tool arguments are under /arguments, capability arguments under /input (for example /input/repo); never flatten business inputs onto the request root. Mock results must be actual JSON values, not JSON-encoded strings when the native schema requires an object or array. Expected-output assertions use JSON pointers and eq/ne/in/exists/contains, always with a value. Request assertions inside calls support eq/contains and shell. Shell commands MUST use op:shell with value:{command:literal executable name,args:[ordered required literal arguments]}. The host tokenizes quotes and escapes without executing commands, checks the command head and ordered argument tokens, and permits extra options such as git -C <repo> before status. Args are decoded literal values, not shell-escaped spellings. Keep cwd/workdir assertions on their own request fields. Unsupported heredoc syntax fails closed. For a shell PATH prefix, add a contains assertion on /arguments/command whose value is the exact corresponding caller input; the matcher compares decoded literal shell fragments, preserving quote-independent data. Other command assertions use shell; raw eq/contains belongs to other JSON fields. For shell wrappers such as sh -c, assert the essential inner command and literal business arguments; the matcher supports inline and wrapped forms. Mock interactions define the dispatch sequence supplied to the builder. Assert each important operation and caller-controlled argument, including options that change business behavior. successValues MUST include ALL trustworthy completed outcomes, including valid empty/negative/not-found outcomes, not only a status spelled success/ok. Never include unknown, failed or pending outcomes. Every non-failure returning case must assert one of these completed outcomes; tag a deliberately unsuccessful boundary case failure too. For every unconstrained root string input, include a boundary case containing whitespace, quotes, shell metacharacters and command substitution syntax (for example a value containing a space, apostrophe, semicolon and $(...)). Treat caller strings as data: POSIX double quotes still expand dollar expressions and backticks; request assertions must preserve argument literals using safe escaping. Shell assertions compare decoded literal arguments so safe single-quote, double-quote and escape spellings can represent the same data; expanded expressions do not count as literal arguments. Safely quote/encode opaque text and valid filesystem paths. Include one SUCCESSFUL literal-data case using whitespace and apostrophes in valid filesystem paths and quotes, semicolons, dollar expressions, backticks and newlines in free-form titles/messages/bodies; keep domain identifiers valid in that case. Combine it with the explicit-options case. Reject only documented domain-invalid structures in a separate failure/boundary case. A blanket character ban on valid paths or free-form text is not successful literal handling; never interpolate unchecked input into shell syntax. Requests in that case must be asserted, or no calls allowed when rejecting the input. Reject incomplete/truncated observations instead of drawing definitive conclusions. Preserve resource/session/transaction lifetimes across tool calls. Unless a native contract explicitly promises persistence, separate shell calls are independent: a PID or other call-scoped handle obtained from a completed call is not a valid persistent caller identity. A capability invocation is not a shared native tool session: each tools.call is independent even within the same capability invocation. A preflight dependency returns data, not a persistent executable environment. When a dependency resolves an executable path or PATH prefix, every later invocation of that executable must explicitly use those returned values. In the combined-options success case, assert the full resolved executable as the shell command head and the returned PATH prefix in the subsequent BUSINESS operation itself, as well as in preflight; asserting only the dependency input does not verify propagation. Use a distinctive executable path outside PATH and a path prefix with spaces in these fixtures so bare executable fallbacks cannot match. Mock internal consistency cannot establish persistence, and a request is not evidence of successful behavior. Defaults must be derived from stable supplied inputs or context whose lifetime is guaranteed; otherwise require explicit input, collect all needed observations atomically while the resource exists, or withdraw unsupported behavior. Do not create mocks that resurrect expired resources or assume shared execution context. No external permission change or privilege escalation is an implementation repair. Failure cases may throw or return non-success. Simulated native command results do NOT verify embedded scripts: omit candidates whose essential executable behavior cannot be tested by this runner (e.g. generated Python/shell daemons), and omit their dependent candidates. Do not invent passing fixtures to force extraction. Tests must assert business evidence, not only a success flag. For selection/filtering workflows, one successful case must include both selected and excluded observations. File publication must cover a selected newly untracked file plus an excluded untracked path. Assert the COMPLETE returned included/excluded collections with eq (using deterministic ordering), not only contains; contains cannot detect falsely reported extra elements. Initial observations must not be mislabeled as remaining or ignored state after a mutation. Keep only meaningful verified business outputs. Failure diagnostics with free-form wording should assert outcome and message presence; exact codes belong in enum/const fields, while expected text must be supported by external evidence. Before freezing, request assertion paths and whole-argument expectations must match the real native tool input schema. At execution, the host validates dispatched tool arguments against the same schema and exact supported field names. An assertion cannot invent an env field that the tool does not expose. In successful cases, assert exact external identifiers, links and other promised artifacts with eq. The host removes or nulls uniquely observed structured result fields supporting those assertions and requires a non-success outcome when evidence is lost. A required JSON observation replaced by {} is unavailable evidence; only an explicitly authored trustworthy empty-result case or documented optional observation establishes an alternative. Missing and null identifiers are not completed artifacts. Authentication flags must positively establish validity before mutations. Native foreground commands also undergo shell environment validation: an environment assignment must expand an inherited variable reference rather than quote it as literal data. A prefix path remains literal while inherited PATH expands. Include realistic canonical results and command nonzero/permission errors, domain empty and negative states when relevant; derive from the contract, not a fixed incident checklist.',
 };
 const canonical = value => JSON.stringify(value, (_k,v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))) : v);
 export const acceptanceDigest = value => createHash('sha256').update(canonical(value)).digest('hex');
@@ -30,7 +31,7 @@ function check(value, assertion) {
   }
 }
 /** Collect independent issues in one pass; invalid branches do not hide other candidates. */
-export function acceptanceIssues(value, planned, { toolContracts, capabilitySchemas = new Map() } = {}) {
+export function acceptanceIssues(value, planned, { toolContracts, toolDefinitions, capabilitySchemas = new Map(), strictShell = false } = {}) {
   const issues = [];
   const issue = (code, path, message, context = {}) => issues.push({ code, path, message, ...context });
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -63,10 +64,19 @@ export function acceptanceIssues(value, planned, { toolContracts, capabilitySche
     if (!Array.isArray(contract.cases)) { add('INVALID_CASES', '/cases', 'Supply 4..40 cases'); return; }
     if (contract.cases.length < 4 || contract.cases.length > 40) add('INVALID_CASE_COUNT', '/cases', 'Supply 4..40 cases');
     const cases = contract.cases.filter(test => test && typeof test === 'object');
+    const shellTools=new Set(cases.flatMap(test=>(Array.isArray(test.calls) ? test.calls : []).filter(call=>call?.channel==='tool' && call.result?.kind==='foreground').map(call=>call.name)));
     const coverage = new Set(cases.flatMap(test => Array.isArray(test.covers) ? test.covers : []));
     for (const tag of ['success', 'defaults', 'failure', 'boundary']) if (!coverage.has(tag)) add('MISSING_COVERAGE', '/cases', 'Missing coverage: ' + tag, { missingTag: tag });
     const optional = Object.keys(contract.inputSchema?.properties || {}).filter(k => !(Array.isArray(contract.inputSchema.required) ? contract.inputSchema.required : []).includes(k));
     if (!cases.some(test => Array.isArray(test.covers) && test.covers.includes('defaults') && test.input && optional.every(k => !Object.hasOwn(test.input, k)))) add('DEFAULTS_REQUIRED', '/cases', 'Defaults case must omit all optional root inputs', { optionalFields: optional });
+    if(optional.length && !cases.some(test=>test.covers?.includes('success') && !test.covers.includes('failure') && optional.every(key=>Object.hasOwn(test.input || {},key) && (contract.inputSchema.properties[key]?.type!=='string' || String(test.input[key]).length>0)))) add('OPTIONS_SUCCESS_REQUIRED','/cases','Add one combined successful case with all optional inputs explicitly set to meaningful values. Assert their effects on dispatched requests or outputs. CLI path options must assert the supplied executable path; PATH prefixes may use contains with the exact input value on /arguments/command.',{optionalFields:optional});
+    const containsInput=(value,input)=>typeof value==='string' ? value.includes(input) : !!value && typeof value==='object' && Object.values(value).some(v=>containsInput(v,input));
+    for(const name of optional) {
+      const schema=contract.inputSchema.properties[name];
+      if(schema?.type!=='string' || schema.enum || Object.hasOwn(schema,'const')) continue;
+      const bound=cases.some(test=>test.covers?.includes('success') && !test.covers.includes('failure') && typeof test.input?.[name]==='string' && test.input[name].length && [...(test.calls || []).flatMap(call=>call.assertions || []),...(test.expect?.assertions || [])].some(a=>containsInput(a.value,test.input[name])));
+      if(!bound) add('OPTION_EFFECT_REQUIRED','/cases','Assert this supplied optional string in a successful request or returned business value. Use the full executable path for a CLI path, and contains with the exact input for a shell PATH prefix. Combine options in one success case; remove fields whose behavior is unsupported.',{field:name});
+    }
     if (new Set(cases.map(test => test.id)).size !== cases.length) add('DUPLICATE_CASE_ID', '/cases', 'Case IDs must be unique');
     contract.cases.forEach((test, j) => {
       const path = `/cases/${j}`;
@@ -95,10 +105,23 @@ export function acceptanceIssues(value, planned, { toolContracts, capabilitySche
         if (!call || !['tool','capability','reason'].includes(call.channel) || !call.name || (!call.error && !Object.hasOwn(call, 'result'))) { err('INVALID_MOCK', cp, 'Require channel, name and canonical result or thrown error'); return; }
         if (call.assertions !== undefined && !Array.isArray(call.assertions)) err('INVALID_REQUEST_ASSERTION', cp + '/assertions', 'Request assertions must be an array');
         else (call.assertions || []).forEach((a, n) => {
-          if (!a || typeof a.path !== 'string' || !a.path.startsWith('/') || !['eq','contains'].includes(a.op) || !Object.hasOwn(a,'value')) { err('INVALID_REQUEST_ASSERTION', `${cp}/assertions/${n}`, 'Request assertions support JSON pointers and eq/contains with a value'); return; }
+          if (!a || typeof a.path !== 'string' || !a.path.startsWith('/') || !['eq','contains','shell'].includes(a.op) || !Object.hasOwn(a,'value')) { err('INVALID_REQUEST_ASSERTION', `${cp}/assertions/${n}`, 'Request assertions support JSON pointers and eq/contains/shell with a value'); return; }
+          if(a.op==='shell' && (call.channel!=='tool' || a.path!=='/arguments/command' || !a.value || typeof a.value.command!=='string' || !a.value.command || !Array.isArray(a.value.args) || a.value.args.some(arg=>typeof arg!=='string') || Object.keys(a.value).some(key=>!['command','args'].includes(key)))) err('INVALID_SHELL_ASSERTION', `${cp}/assertions/${n}`, 'Use shell on /arguments/command with value:{command:literal command name,args:[ordered literal arguments]}; quote syntax belongs to the implementation, not the expected argument values');
+          if(strictShell && a.op==='shell' && /^(?:.*\/)?(?:sh|bash|dash|zsh|ksh)$/.test(a.value?.command || '') && Array.isArray(a.value.args) && a.value.args.some(arg=>/^-[a-z]*c[a-z]*$/.test(arg))) err('SCRIPT_BODY_ASSERTION', `${cp}/assertions/${n}`, 'Assert essential inner operations and literal business arguments, not the interpreter or an exact script body. Inline and sh -c wrappers represent the same operation.');
+          if(strictShell && shellTools.has(call.name) && a.path==='/arguments/command' && a.op!=='shell' && !(a.op==='contains' && typeof a.value==='string' && a.value.length && Object.values(test.input || {}).includes(a.value))) err('SHELL_ASSERTION_REQUIRED', `${cp}/assertions/${n}`, 'Use shell argv assertions for commands. Raw eq/contains imposes incidental quoting, spacing and option placement.', {suggested:{path:a.path,op:'shell',value:{command:'executable-name',args:['required-subcommand-or-argument']}}});
           const roots = call.channel === 'capability' ? ['name','input'] : call.channel === 'tool' ? ['name','arguments'] : ['name','prompt','outputSchema'];
           const root = a.path.split('/')[1];
           if (!roots.includes(root)) err('REQUEST_ASSERTION_PATH', `${cp}/assertions/${n}/path`, 'Assertion targets the SDK request envelope, not its flattened business input', {channel:call.channel,actualPath:a.path,allowedRoots:roots,suggestedPath:call.channel === 'capability' ? '/input'+a.path : call.channel === 'tool' ? '/arguments'+a.path : undefined});
+          if(a.path==='/name' && a.op==='eq' && a.value!==call.name) err('REQUEST_ASSERTION_CONTRADICTION',`${cp}/assertions/${n}`,'Request name must equal the mocked dispatch name',{expectedName:call.name});
+          const parameters=call.channel==='tool' && toolDefinitions?.get(call.name)?.parameters;
+          if(parameters && root==='arguments') {
+            const field=a.path.split('/')[2]?.replace(/~1/g,'/').replace(/~0/g,'~');
+            if(field && !Object.hasOwn(parameters.properties || {},field)) err('REQUEST_ARGUMENT_FIELD_UNKNOWN',`${cp}/assertions/${n}/path`,'Assertion references an unsupported native tool argument. Use a declared field. Shell environment prefixes are literals in /arguments/command, checked with contains and the exact caller prefix value.',{tool:call.name,actualPath:a.path,allowedFields:Object.keys(parameters.properties || {})});
+            if(!field && a.op==='eq') {
+              const errors=validateJsonSchemaValue({...parameters,additionalProperties:false},a.value);
+              if(errors.length) err('REQUEST_ARGUMENT_VALUE_INVALID',`${cp}/assertions/${n}/value`,'Expected arguments must match the native tool input schema',{tool:call.name,errors});
+            }
+          }
         });
         if (call.channel === 'tool' && toolContracts && !toolContracts.has(call.name)) err('TOOL_CONTRACT_REQUIRED', cp, 'Read exact native tool contract before mocking: ' + call.name, { tool: call.name });
         if (call.error) return;
@@ -151,8 +174,77 @@ function callEvidence(test, index, injection) {
   const call = test.calls[index];
   return call && {origin:'acceptance-mock',index,...(injection ? {injection} : {}),channel:call.channel,name:call.name,assertions:call.assertions,result:call.result,error:call.error};
 }
-export async function runAcceptance(candidates, suite, { signal } = {}) {
+// Derive evidence loss from the independent oracle's business output assertions.
+// Transport success alone cannot establish the asserted business artifact.
+function missingEvidenceVariants(test, contract) {
+  const inputValues=new Set();
+  const collect=value=>{if(value && typeof value==='object') Object.values(value).forEach(collect);else if(['string','number'].includes(typeof value)) inputValues.add(String(value));};
+  collect(test.input);
+  const assertions = (test.expect.assertions || []).filter(a=>a.op==='eq' && a.path!==contract.outcomePath && ['string','number'].includes(typeof a.value) && String(a.value).length && !inputValues.has(String(a.value)));
+  const structuredBody=call=>{
+    if(call.result?.kind!=='foreground') return call.result;
+    const text=call.result.stdout?.text || '';
+    try {return JSON.parse(text);} catch {
+      try {return JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1));} catch {return undefined;}
+    }
+  };
+  const observations = test.calls.flatMap((call,index)=>{
+    if(call.optionalReason?.trim()) return [];
+    let body=call.result, jsonStdout=false;
+    if(body?.kind==='foreground') {
+      const parsed=structuredBody(call);if(parsed===undefined) return [{index,mutable:false,leaves:[{path:[],value:body.stdout?.text?.trim()}]}];body=parsed;jsonStdout=true;
+    }
+    if(!body || typeof body!=='object' || Array.isArray(body)) return [];
+    const leaves=[];
+    const visit=(value,path)=>{
+      if(value && typeof value==='object') for(const [key,item] of Object.entries(value)) visit(item,[...path,key]);
+      else if(['string','number'].includes(typeof value) && String(value).length) leaves.push({path,value});
+    };
+    visit(body,[]);
+    return [{index,body,jsonStdout,leaves,mutable:true}];
+  });
+  const variants=new Map();
+  for(const assertion of assertions) {
+    const matches=observations.flatMap(item=>item.leaves.filter(leaf=>String(leaf.value)===String(assertion.value)).map(leaf=>({...item,...leaf})));
+    // A second independent observation can legitimately supply the same fact.
+    if(matches.length!==1 || !matches[0].mutable) continue;
+    const {index,body,jsonStdout,path}=matches[0];
+    for(const kind of ['missing','null']) {
+      const mutated=structuredClone(body);const parent=path.slice(0,-1).reduce((v,k)=>v[k],mutated);
+      if(kind==='missing') delete parent[path.at(-1)];else parent[path.at(-1)]=null;
+      const faultTest=structuredClone(test);
+      if(jsonStdout) faultTest.calls[index].result.stdout.text=JSON.stringify(mutated);
+      else faultTest.calls[index].result=mutated;
+      const key=index+':'+kind+':'+path.join('/');
+      variants.set(key,{index,kind,path:'/'+path.map(k=>k.replace(/~/g,'~0').replace(/\//g,'~1')).join('/'),outputPath:assertion.path,test:faultTest});
+    }
+  }
+  for(const {index,body,jsonStdout,mutable} of observations) {
+    if(!mutable || !Object.keys(body).length) continue;
+    const call=test.calls[index];
+    const declaredEmpty=contract.cases.some(other=>other.covers.includes('empty') && !other.covers.includes('failure') && other.calls.some(c=>c.channel===call.channel && c.name===call.name && canonical(structuredBody(c))==='{}'));
+    if(declaredEmpty) continue;
+    const faultTest=structuredClone(test);
+    if(jsonStdout) faultTest.calls[index].result.stdout.text='{}';else faultTest.calls[index].result={};
+    variants.set(index+':empty-json',{index,kind:'empty-json',path:'/',test:faultTest});
+  }
+  return [...variants.values()];
+}
+export async function runAcceptance(candidates, suite, { signal, toolDefinitions } = {}) {
   signal?.throwIfAborted();
+  const evaluate=async payload=>{
+    const actual=await isolated(payload,signal);
+    if(toolDefinitions) for(const [index,entry] of (actual.trace || []).entries()) {
+      if(entry.channel!=='tool') continue;
+      const parameters=toolDefinitions.get(entry.request.name)?.parameters;
+      const errors=parameters ? validateJsonSchemaValue({...parameters,additionalProperties:false},entry.request.arguments) : ['Native tool contract unavailable'];
+      if(errors.length) {
+        (actual.violations ??= []).push('TOOL_ARGUMENT_SCHEMA_MISMATCH');
+        (actual.requestFailures ??= []).push({index,channel:'tool',name:entry.request.name,path:'/arguments',errors,allowedFields:parameters && Object.keys(parameters.properties || {}),actual:entry.request.arguments});
+      }
+    }
+    return actual;
+  };
   const results=[];
   for (const contract of suite.contracts) if (!candidates.some(candidate => candidate.name === contract.name)) results.push({name:contract.name,passed:false,error:'Frozen contract has no implementation; unchanged reuse must also pass acceptance'});
   for (const candidate of candidates) {
@@ -167,7 +259,7 @@ export async function runAcceptance(candidates, suite, { signal } = {}) {
     for (const test of contract.cases) {
       signal?.throwIfAborted();
       let actual;
-      try { actual=await isolated({program:candidate.execution.program,test}, signal); }
+      try { actual=await evaluate({program:candidate.execution.program,test}, signal); }
       catch(error) { actual={harnessFailure:true,error:error.message}; }
       signal?.throwIfAborted();
       const assertions = (test.expect.assertions || []).map(assertion=>({...assertion,passed:check(actual.output,assertion)}));
@@ -175,6 +267,15 @@ export async function runAcceptance(candidates, suite, { signal } = {}) {
       const falseSuccess = test.covers.includes('failure') && contract.successValues.some(v=>canonical(v)===canonical(pointer(actual.output,contract.outcomePath)));
       const passed = !actual.harnessFailure && !actual.violations?.length && !falseSuccess && actual.remaining===0 && !outputErrors.length && (test.expect.throws ? !!actual.error && !actual.error.startsWith('UNEXPECTED_DISPATCH') && !actual.error.startsWith('REQUEST_ASSERTION') : !actual.error && assertions.every(a=>a.passed));
       results.push({name:candidate.name,caseId:test.id,passed,actual,assertions,outputErrors,falseSuccess,...(!passed ? {callEvidence:callEvidence(test,(actual.trace?.length || 0)-1)} : {})});
+      if(passed && !test.covers.includes('failure')) for(const variant of missingEvidenceVariants(test,contract)) {
+        const call=test.calls[variant.index];
+        const key=call.channel+':'+call.name+':'+variant.kind+':'+variant.path;
+        if(injected.has(key)) continue;
+        injected.add(key);signal?.throwIfAborted();
+        let fault;try {fault=await evaluate({program:candidate.execution.program,test:variant.test},signal);}catch(error){fault={harnessFailure:true,error:error.message};}
+        const falseSuccess=contract.successValues.some(v=>canonical(v)===canonical(pointer(fault.output,contract.outcomePath)));
+        results.push({name:candidate.name,caseId:test.id+':injected-'+variant.kind+'-evidence-'+variant.index+variant.path,passed:!fault.harnessFailure&&!fault.violations?.length&&!falseSuccess&&(!!fault.error||!validateExecutionOutput(candidate.execution,fault.output).length),actual:fault,falseSuccess,expected:{...faultExpectation,unavailableResponsePath:variant.path,responseChange:variant.kind,requiredOutputPath:variant.outputPath},callEvidence:callEvidence(variant.test,variant.index,variant.kind+'-evidence')});
+      }
       if (passed && !test.covers.includes('failure')) for(let index=0;index<test.calls.length;index++) {
         signal?.throwIfAborted();
         if(test.calls[index].optionalReason?.trim()) continue;
@@ -182,7 +283,7 @@ export async function runAcceptance(candidates, suite, { signal } = {}) {
         if (!injected.has(key+':throw')) {
         injected.add(key+':throw');
         const faultTest=structuredClone(test); faultTest.calls[index]={...faultTest.calls[index],result:undefined,error:'ACCEPTANCE_INJECTED_DISPATCH_FAILURE'};
-        let fault; try {fault=await isolated({program:candidate.execution.program,test:faultTest}, signal);} catch(error) {fault={harnessFailure:true,error:error.message};}
+        let fault; try {fault=await evaluate({program:candidate.execution.program,test:faultTest}, signal);} catch(error) {fault={harnessFailure:true,error:error.message};}
         const success=contract.successValues.some(v=>canonical(v)===canonical(pointer(fault.output,contract.outcomePath)));
         results.push({name:candidate.name,caseId:test.id+':injected-failure-'+index,passed:!fault.harnessFailure && !fault.violations?.length && !success && (!!fault.error || !validateExecutionOutput(candidate.execution,fault.output).length),actual:fault,falseSuccess:success,expected:faultExpectation,callEvidence:callEvidence(faultTest,index,'failure')});
         }
@@ -202,7 +303,7 @@ export async function runAcceptance(candidates, suite, { signal } = {}) {
             const failedResponse=structuredClone(test);
             failedResponse.calls[index].result={...response,...changes};
             delete failedResponse.calls[index].error;
-            let actual;try {actual=await isolated({program:candidate.execution.program,test:failedResponse}, signal);}catch(error){actual={harnessFailure:true,error:error.message};}
+            let actual;try {actual=await evaluate({program:candidate.execution.program,test:failedResponse}, signal);}catch(error){actual={harnessFailure:true,error:error.message};}
             const falseSuccess=contract.successValues.some(v=>canonical(v)===canonical(pointer(actual.output,contract.outcomePath)));
             results.push({name:candidate.name,caseId:test.id+':injected-'+variant+'-'+index,passed:!actual.harnessFailure&&!actual.violations?.length&&!falseSuccess&&(!!actual.error||!validateExecutionOutput(candidate.execution,actual.output).length),actual,falseSuccess,expected:faultExpectation,callEvidence:callEvidence(failedResponse,index,variant)});
           }
@@ -213,5 +314,5 @@ export async function runAcceptance(candidates, suite, { signal } = {}) {
     }
   }
   signal?.throwIfAborted();
-  return {policy:'representative-faults-v1',passed:results.every(r=>r.passed),suiteDigest:acceptanceDigest(suite),candidateDigest:acceptanceDigest(candidates),results};
+  return {policy:'business-evidence-v5',passed:results.every(r=>r.passed),suiteDigest:acceptanceDigest(suite),candidateDigest:acceptanceDigest(candidates),results};
 }
