@@ -3,11 +3,12 @@
 function bundledContent(bundle) {
   const { root } = bundle;
   return JSON.stringify({ name: root.name, description: root.description, version: root.version,
-    inputSchema: root.execution?.inputSchema, outputSchema: root.execution?.outputSchema,
+    compatibility: root.compatibility ?? { limitations: 'Platform compatibility has not been declared for this legacy revision.' },
+    inputSchema: root.execution?.inputSchema, outputSchema: root.execution?.outputSchema, outcome:root.execution?.outcome,
     available: Boolean(root.execution),
     invocation: root.execution ? { tool: 'capability_run', arguments: { name: root.name, input: 'Object matching inputSchema' } } : null,
     instruction: root.execution
-      ? 'Invoke capability_run once with the requested inputs. Load this root contract only: the executor resolves its dependencies and CLI operations internally. Use the verified output/receipt; combine any missing final read-only fields into one check. External blockers require caller action; internal repair is handled inside the plugin.'
+      ? 'Invoke capability_run once with the requested inputs. Load this root contract only: the executor resolves its dependencies and CLI operations internally. Use the verified output/receipt. Default to bounded business summaries; request raw detail only when necessary. delivery.complete=false means a preview: use capability_result_read with the retained runId and needed JSON pointers, never repeat the query or read implementation to retrieve detail. Follow published hard parameter bounds exactly; default annotations do not insert values. External blockers require caller action; internal repair is handled inside the plugin.'
       : 'This legacy definition has no executable contract yet. Ask the native optimization Agent to compile it before black-box invocation.',
   });
 }

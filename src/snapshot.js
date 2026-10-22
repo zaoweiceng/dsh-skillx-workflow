@@ -40,7 +40,7 @@ export function extractionSnapshot(sessionId, snapshot, { bounded = true } = {})
       if (!original) observedOutputs.set(identity, evidence);
     }
   }
-  if (!messages.length) throw new Error('对话暂无可提取内容');
+  if (!messages.length && !toolEvidence.length) throw new Error('对话暂无可提取内容');
   const body = { sessionId, title: title.slice(0, 200), cwd, messages, toolEvidence };
   if (bounded && (messages.length > 500 || toolEvidence.length > 500 || messages.some(m => m.content.length > 65536) || Buffer.byteLength(JSON.stringify(body)) > 1048576)) {
     throw new Error('对话超过提取上限，请选择较短的对话；未截断或发送部分证据。');

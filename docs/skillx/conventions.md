@@ -26,9 +26,11 @@ Workflow 通过 `capabilities.run` 组合能力和必要判断，并声明精确
 
 ## 执行程序
 
-`execution.program` 是普通 JavaScript async function body，使用 `input`、`tools.call`、`capabilities.run` 和 `capabilities.reason`。执行阶段注释使用简体中文。
+`execution.program` 可以是 JavaScript async function body，或完整 Python JSON stdin/stdout 程序。按实际依赖选择一种语言，不复制业务实现。JS 通过 `processes.run` 的参数数组执行外部工具，使用 `resources.run` 直接执行内部脚本，避免 Bash 包装。执行阶段注释使用简体中文。
 
-确定性操作由程序串联；需要模型判断的节点使用 `capabilities.reason`。程序检查工具状态、结果完整性和业务前提，返回符合输出 Schema 的 JSON。
+必要的辅助脚本随版本存入 `scripts/` 或 `assets/`，执行程序用 `resources.path` 内部定位，不要求调用方提供脚本路径。使用同一份实现，不能兼容的平台明确注明。未知环境变量、配置或工具位置须询问用户，不猜测或广泛搜索。
+
+确定性操作由程序串联；失败时才由宿主启动内部恢复子 Agent，读取该 SkillX 自己的 docs 指引。程序检查工具状态、结果完整性和业务前提，返回符合输出 Schema 的 JSON。
 
 `content` 说明能力目的和使用条件，`validationNotes` 记录证据引用、已检查行为和观察范围。内部步骤由执行程序承担，调用方通过输入输出契约使用能力。
 
@@ -49,7 +51,7 @@ Workflow 通过 `capabilities.run` 组合能力和必要判断，并声明精确
 
 提取使用冻结的会话记录，按职责选择相关完整证据，记录来源摘要和实际审查范围。多来源任务分别获取各来源的相关记录。
 
-生成 Agent 使用证据读取、契约读取和候选提交工具。宿主冻结验收契约，校验实现并发布版本。优化基于选中能力的当前版本和观察证据修订；可继续复用的实现保留原版本。
+生成 Agent 使用证据读取、契约读取和候选提交工具。宿主仅检查静态结构并发布版本，不生成用例或执行业务验证。优化基于选中能力的当前版本和观察证据修订；可继续复用的实现保留原版本。
 
 草稿续跑、请求上下文与局部修复见[提取草稿与预算](../operation.md#提取草稿与预算)。
 
@@ -58,3 +60,7 @@ Workflow 通过 `capabilities.run` 组合能力和必要判断，并声明精确
 项目说明使用“启用 skillx”表示模型可以发现并调用插件能力。实现说明使用执行程序、能力依赖和编排流程等具体名称。
 
 测试 JSON 保留实验字段和原始数据，面向读者的说明交代实验条件、统计口径和证据位置。
+
+## 目录与说明
+
+当前版本放在 `skillx/<name>/` 或 `workflow/<name>/`；平级 `revisions/<revisionId>/` 保存不可变快照。每个目录保留 `SKILL.md` 简述用途与使用条件、`manifest.json` 记录机器契约、`entry.js` 或 `entry.py` 保存入口，`scripts/`、`assets/`、`docs/` 保存内部依赖与错误指引。JS 入口仍是宿主执行的函数体，不能直接当作独立 Node 文件运行。目录用于阅读，修改需通过发布生成新修订，执行始终绑定不可变版本。

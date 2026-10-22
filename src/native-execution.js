@@ -1,7 +1,11 @@
+import { deliverResult, resultPage } from './result-delivery.js';
+import { fileURLToPath } from 'node:url';
+import { PROCESS_TOOL } from './native-process.js';
+import { recoveryGuides } from './recovery-guides.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, appendFile, writeFile, readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { normalizeExecution, validateExecutionInput, validateExecutionOutput } from './native-contract.js';
+import { normalizeExecution, validateExecutionInput, validateExecutionOutput, businessOutcome } from './native-contract.js';
 import { createHostExecutionContext } from './host-execution-context.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { sandboxDenied, nativeRetryMode, nativeApprovalOutcome } from './native-tool-approval.js';
@@ -21,7 +25,7 @@ const constraints = {
 
 /** Programs are DSH-authored data executed only by the host's public PTC service. */
 export function createNativeExecutionService(ctx, store, {
-  dataRoot, timeoutMs = 120000, maxCalls = 100, maxDepth = 8, maxOutputBytes = 65536, reason,
+  dataRoot, timeoutMs = 120000, maxCalls = 100, maxDepth = 8, maxOutputBytes = 65536, recover, nodeExecutable=process.execPath, pythonExecutable="python3", executables={},
 } = {}) {
   if (!dataRoot) throw new Error('Execution dataRoot is required');
   for (const [key, value] of Object.entries({ timeoutMs, maxCalls, maxDepth, maxOutputBytes })) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Invalid execution bound: ' + key);
@@ -177,7 +181,7 @@ export function createNativeExecutionService(ctx, store, {
     const inputErrors = validateExecutionInput(contract, input);
     if (inputErrors.length) throw new ExecutionFault('INPUT_SCHEMA_INVALID', 'input', 'internal', inputErrors);
     const { ptc, policy } = services();
-    if (!ptc?.resolve || !ptc?.run || ptc.language !== 'typescript' || ptc.isolation !== 'process' || !policy?.resolve) throw new ExecutionFault('NATIVE_PTC_UNAVAILABLE', 'admission', 'external');
+    if (contract.language!=='python' && (!ptc?.resolve || !ptc?.run || ptc.language !== 'typescript' || ptc.isolation !== 'process' || !policy?.resolve)) throw new ExecutionFault('NATIVE_PTC_UNAVAILABLE', 'admission', 'external');
     const implementationId = `${ledger.runId}:implementation:${ledger.implementations.length + 1}`;
     const implementation = { implementationId, name: owner.name, version: owner.version, revisionId: owner.revisionId, input: json(input), execution: contract, dependencies: owner.dependencies ?? [] };
     ledger.implementations.push({ implementationId, name: owner.name, version: owner.version, revisionId: owner.revisionId, digest: hash(contract) });
@@ -185,6 +189,30 @@ export function createNativeExecutionService(ctx, store, {
     const bindings = {
       input: async () => json(input),
       tool: async request => callTool(request, exec, ledger, owner),
+      process: async request => {
+        if (!request || typeof request!=='object') throw new ExecutionFault('INVALID_PROCESS_REQUEST','dispatch');
+        return callTool({name:PROCESS_TOOL,arguments:{...request,timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))}},exec,ledger,owner);
+      },
+      script: async request => {
+        if (!request || typeof request.path!=='string') throw new ExecutionFault('INVALID_RESOURCE_PATH','resource');
+        const entryPath=request.path==='@entry'?await store.resolveEntry(owner,{signal:ledger.signal}):await store.resolveResource(owner,request.path,{signal:ledger.signal});
+        const paths={};
+        for(const path of Object.keys(owner.resources ?? {})) paths[path]=await store.resolveResource(owner,path,{signal:ledger.signal});
+        const runtime=request.path==='@entry'?'python':request.path.endsWith('.py')?'python':'node';
+        const context={resources:paths,nodeExecutable,pythonExecutable,executables};
+        const args=runtime==='node'?[fileURLToPath(new URL('./script-bootstrap.cjs',import.meta.url)),entryPath]:[entryPath];
+        const result=await callTool({name:PROCESS_TOOL,arguments:{executable:runtime==='node'?'@node':'@python',args,
+          ...(request.cwd ? {cwd:request.cwd}:{}),...(request.pathPrefix ? {pathPrefix:request.pathPrefix}:{}),
+          inheritEnv:request.inheritEnv ?? [],stdin:JSON.stringify({input:request.input ?? input,context}),
+          timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))}},exec,ledger,owner);
+        if(result.exitCode!==0 || result.timedOut || result.aborted || result.stdout?.truncated || result.stderr?.truncated) throw new ExecutionFault('SCRIPT_EXECUTION_FAILED','program','unknown',result.stderr?.text);
+        try {return JSON.parse(result.stdout.text);} catch {throw new ExecutionFault('SCRIPT_OUTPUT_INVALID','output');}
+      },
+      resource: async request => {
+        check(ledger);
+        if (typeof request?.path !== 'string') throw new ExecutionFault('INVALID_RESOURCE_PATH', 'resource');
+        return store.resolveResource(owner, request.path, {signal:ledger.signal});
+      },
       reuse: async request => {
         check(ledger);
         const previous = ledger.reuse.get(request?.stepId);
@@ -208,34 +236,21 @@ export function createNativeExecutionService(ctx, store, {
           definition = bundle.root;
         }
         if (definition.version !== lock.version) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
-        return executeProgram(definition.execution, request.input, exec, ledger, definition, [...path, identity]);
+        try { return await executeProgram(definition.execution, request.input, exec, ledger, definition, [...path, identity]); }
+        catch (error) { ledger.failedCapability ??= {name:definition.name,version:definition.version,revisionId:definition.revisionId}; throw error; }
       },
-      reason: async request => {
-        check(ledger);
-        if (typeof reason !== 'function') throw new ExecutionFault('NATIVE_REASONING_UNAVAILABLE', 'reasoning');
-        await ledger.event({ type: 'reasoning/start', owner: owner.name, request });
-        let result;
-        try { result = await track(ledger, reason(request, exec, { signal: ledger.signal, runId: ledger.runId, deadline: ledger.deadline,
-          ...(contextOf(exec) ? { hostContext: { id: contextOf(exec).id, cwd: contextOf(exec).cwd }, onSession: async sessionId => {
-            ledger.relatedSessions.push(sessionId);
-            await ledger.event({ type: 'reasoning/session', owner: owner.name, sessionId });
-            await contextOf(exec).onSession?.(sessionId);
-          } } : {}) })); }
-        catch (error) {
-          if (Array.isArray(error.relatedSessions)) ledger.relatedSessions.push(...error.relatedSessions);
-          if (Array.isArray(error.usage)) ledger.usage.push(...error.usage);
-          await ledger.event({ type: 'reasoning/end', owner: owner.name, status: 'failed', code: code(error.code), relatedSessions: error.relatedSessions ?? [], usage: error.usage ?? [] });
-          throw error;
-        }
-        if (!result || !Object.hasOwn(result, 'output')) throw new ExecutionFault('INVALID_NATIVE_REASONING_RESULT', 'reasoning');
-        if (Array.isArray(result.relatedSessions)) ledger.relatedSessions.push(...result.relatedSessions);
-        if (Array.isArray(result.usage)) ledger.usage.push(...result.usage);
-        await ledger.event({ type: 'reasoning/end', owner: owner.name, status: 'completed', output: result.output, relatedSessions: result.relatedSessions ?? [], usage: result.usage ?? [] });
-        return json(result.output);
-      },
+      // Legacy programs fail into internal recovery rather than starting a model on the normal path.
+      reason: async () => { throw new ExecutionFault('AGENT_INTERVENTION_REQUIRES_FAILURE', 'program'); },
     };
+    if(contract.language==='python'){
+      const value=await track(ledger,bindings.script({path:'@entry',input}));
+      await ledger.event({type:'implementation/end',implementationId,value});
+      const errors=validateExecutionOutput(contract,value);
+      if(errors.length)throw new ExecutionFault('OUTPUT_SCHEMA_INVALID','output','internal',errors);
+      return value;
+    }
     const functions = Object.fromEntries(Object.entries(bindings).map(([name, fn]) => [name, request => track(ledger, Promise.resolve().then(() => fn(request)))]));
-    const program = `const input = await __native_capability.input({});\nconst tools = Object.freeze({call: request => __native_capability.tool(request), reuse: request => __native_capability.reuse(request)});\nconst capabilities = Object.freeze({run: request => __native_capability.capability(request), reason: request => __native_capability.reason(request)});\n${contract.program}`;
+    const program = `const input = await __native_capability.input({});\nconst tools = Object.freeze({call: request => __native_capability.tool(request), reuse: request => __native_capability.reuse(request)});\nconst capabilities = Object.freeze({run: request => __native_capability.capability(request), reason: request => __native_capability.reason(request)});\nconst resources = Object.freeze({path: path => __native_capability.resource({path}), run: request => __native_capability.script(JSON.parse(JSON.stringify(request)))});\nconst processes = Object.freeze({run: request => __native_capability.process(JSON.parse(JSON.stringify(request)))});\n${contract.program}`;
     const host = contextOf(exec);
     const sandboxPolicy = host ? { mode: 'danger-full-access', workspaceRoot: host.cwd } : policy.resolve({ session: exec.agent.session });
     const spec = ptc.resolve({ program, bindings: [{ global: '__native_capability', functions }],
@@ -246,7 +261,6 @@ export function createNativeExecutionService(ctx, store, {
     if (result.error) throw new ExecutionFault('PROGRAM_' + result.error.kind.replaceAll('-', '_').toUpperCase(), 'program', ledger.nativeFailures.length ? 'unknown' : 'internal', result.error);
     const outputErrors = validateExecutionOutput(contract, result.value);
     if (outputErrors.length) throw new ExecutionFault('OUTPUT_SCHEMA_INVALID', 'output', 'internal', outputErrors);
-    if (Buffer.byteLength(JSON.stringify(result.value)) > maxOutputBytes) throw new ExecutionFault('OUTPUT_SIZE_LIMIT', 'output');
     return result.value;
   }
   async function perform(execution, input, exec, owner, options = {}) {
@@ -263,9 +277,10 @@ export function createNativeExecutionService(ctx, store, {
       if (ledger.pending.size) { ledger.controller.abort(); await Promise.allSettled([...ledger.pending]); throw new ExecutionFault('UNAWAITED_BINDINGS', 'program'); }
       // PTC owns process cleanup; full binding lifetimes are tracked above.
       await Promise.allSettled([...ledger.pending]);
-      const receipt = { runId: ledger.runId, status: 'completed', capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId },
+      const receipt = { runId: ledger.runId, status: 'completed', businessOutcome:businessOutcome(execution,output), capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId },
         implementations: ledger.implementations, steps: ledger.steps, relatedSessions: [...new Set(ledger.relatedSessions)], usage: ledger.usage,
         startedAt: ledger.startedAt, deadline: ledger.deadline, finishedAt: new Date().toISOString(), constraints: constraintsOf(exec), outputDigest: hash(output) };
+      await writeFile(join(ledger.directory, 'output.json'), JSON.stringify(output), { mode: 0o600 });
       await ledger.event({ type: 'execution/end', status: 'completed', output, receipt });
       await writeFile(join(ledger.directory, 'receipt.json'), JSON.stringify(receipt, null, 2), { mode: 0o600 });
       await ledger.logTail;
@@ -278,7 +293,7 @@ export function createNativeExecutionService(ctx, store, {
       // rather than sending a declined/cancelled operation into model repair.
       const failed = ledger?.authorizationFailure ?? error;
       const timedOut = ledger?.timedOut && !ledger.authorizationFailure;
-      const failure = { code: timedOut ? 'EXECUTION_TIMEOUT' : code(failed.code), category: timedOut ? 'unknown' : failed.category ?? 'unknown', stage: failed.stage ?? 'infrastructure', retryable: false,
+      const failure = { capability: ledger?.failedCapability?.name ?? owner.name, capabilityVersion: ledger?.failedCapability?.version ?? owner.version, capabilityRevisionId: ledger?.failedCapability?.revisionId ?? owner.revisionId, code: timedOut ? 'EXECUTION_TIMEOUT' : code(failed.code), category: timedOut ? 'unknown' : failed.category ?? 'unknown', stage: failed.stage ?? 'infrastructure', retryable: false,
         ...(ledger?.nativeFailures.length ? { observedNativeFailures: ledger.nativeFailures.slice(-8) } : {}) };
       const receipt = { ...(ledger ? { runId: ledger.runId, startedAt: ledger.startedAt, deadline: ledger.deadline } : {}), status: 'failed',
         capability: { name: owner.name, version: owner.version, revisionId: owner.revisionId }, steps: ledger?.steps ?? [],
@@ -294,6 +309,62 @@ export function createNativeExecutionService(ctx, store, {
     } finally { if (ledger) { clearTimeout(ledger.timer); ledger.controller.abort(); active.delete(ledger); } }
   }
   const service = {
+    delivery(output, receipt) {
+      const result = deliverResult(output, receipt.runId, Math.min(maxOutputBytes, 16384));
+      if (receipt.steps?.length) result.delivery.observations = {tool:'capability_result_read',runId:receipt.runId,stepId:'index',instruction:'Retained native observations, including query details omitted from the final summary. Read only needed entries; never requery solely for detail.'};
+      return result;
+    },
+    async readResult({runId, pointer, offset, limit, stepId, jsonTextPointer}, exec) {
+      authority(exec);
+      if (jsonTextPointer !== undefined && (stepId === undefined || stepId === 'index')) throw new ExecutionFault('INVALID_RESULT_JSON_TEXT_SOURCE','result');
+      if (typeof runId !== 'string' || !/^[a-f0-9-]{36}$/.test(runId)) throw new ExecutionFault('INVALID_RESULT_REFERENCE', 'result');
+      const directory = join(tracesRoot, runId);
+      const header = JSON.parse(await readFile(join(directory, 'header.json'), 'utf8'));
+      // Subsequent tool calls have different rootCallIds; the owning session is
+      // the stable authority. Workbench outputs cannot be read by a chat.
+      if (!exec.agent?.session.header.id || header.sessionId !== exec.agent.session.header.id || header.executionContext) throw new ExecutionFault('RESULT_AUTHORITY_MISMATCH', 'result', 'external');
+      if (stepId !== undefined) {
+        if (stepId !== 'index' && (typeof stepId !== 'string' || !stepId.startsWith(runId + ':') || !/^[1-9][0-9]*$/.test(stepId.slice(runId.length + 1)))) throw new ExecutionFault('INVALID_RESULT_STEP', 'result');
+        const events = (await readFile(join(directory, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
+        const observations = events.filter(event => event.type === 'dispatch/end' && event.status === 'succeeded' && Object.hasOwn(event,'value'));
+        let value;
+        if (stepId === 'index') value = observations.map(event => ({stepId:event.stepId,name:event.name,read:{runId,stepId:event.stepId,pointer:'',offset:0,limit:4000}}));
+        else {
+          const observation = observations.find(event => event.stepId === stepId);
+          if (!observation) throw new ExecutionFault('RESULT_STEP_NOT_FOUND','result','external');
+          value = observation.value;
+          // Optional decoding is explicit, never inferred from business fields.
+          if (jsonTextPointer !== undefined) {
+            resultPage(value,{pointer:jsonTextPointer,limit:4000});
+            let text = value;
+            for (const key of jsonTextPointer === '' ? [] : jsonTextPointer.slice(1).split('/').map(key=>key.replace(/~1/g,'/').replace(/~0/g,'~'))) text = text[key];
+            if (typeof text !== 'string') throw new ExecutionFault('RESULT_NOT_JSON_TEXT','result','external');
+            try { value = JSON.parse(text); } catch { throw new ExecutionFault('RESULT_NOT_JSON_TEXT','result','external'); }
+          }
+        }
+        return {runId,stepId,...resultPage(value,{pointer,offset,limit})};
+      }
+      let output;
+      try { output = JSON.parse(await readFile(join(directory, 'output.json'), 'utf8')); }
+      catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        try {
+          const resolved = JSON.parse(await readFile(join(directory, 'resolved.json'), 'utf8'));
+          output = resolved.output;
+        } catch (resolvedError) {
+          if (resolvedError.code !== 'ENOENT') throw resolvedError;
+          // Old OUTPUT_SIZE_LIMIT runs already validated their result before
+          // failing delivery. Recover that exact saved value, never requery.
+          const events = (await readFile(join(directory, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
+          const end = events.findLast(event => event.type === 'execution/end');
+          const implementation = events.findLast(event => event.type === 'implementation/end' && Object.hasOwn(event, 'value'));
+          if (end?.failure?.code !== 'OUTPUT_SIZE_LIMIT' || !implementation) throw new ExecutionFault('RESULT_UNAVAILABLE', 'result', 'external');
+          output = implementation.value;
+          await writeFile(join(directory, 'output.json'), JSON.stringify(output), {mode:0o600});
+        }
+      }
+      return {runId, ...resultPage(output, {pointer, offset, limit})};
+    },
     isHostCall(exec) {
       const host = hostEntry.getStore();
       return !!host && !exec.agent && exec.rootCallId === host.id && exec.name === 'capability_run';
@@ -303,10 +374,30 @@ export function createNativeExecutionService(ctx, store, {
       const host = hostEntry.getStore();
       hostExecutions.set(exec, host);
       try {
-        const result = await service.run({ ...request, timeoutMs: 600000 }, exec);
+        const deadline = Date.now() + 600000;
+        const result = await service.run({ ...request, timeoutMs: 120000, deadline }, exec);
+        if (!result.ok && result.entry?.execution && result.failure?.stage !== 'authorization' && result.failure?.code !== 'PLATFORM_UNSUPPORTED' && typeof recover === 'function' && !exec.signal.aborted && Date.now() < deadline) {
+          const trace = result.traceRef ? await service.readTrace(result.traceRef, exec) : { receipt:result.receipt };
+          const restored = await recover({ entry:result.entry, input:request.input, failure:result.failure, receipt:result.receipt, trace, failureGuides:result.failureGuides, resourceEntries:result.resourceEntries, exec, deadline, hostContext:host });
+          result.receipt.relatedSessions = [...new Set([...(result.receipt.relatedSessions ?? []), ...(restored.relatedSessions ?? [])])];
+          if (result.receipt.runId) {
+            const directory = join(tracesRoot, result.receipt.runId);
+            await appendFile(join(directory, 'events.jsonl'), JSON.stringify({type:'recovery/end',outcome:restored.outcome,category:restored.category,reason:restored.reason,relatedSessions:result.receipt.relatedSessions,recoveryRuns:result.receipt.recoveryRuns ?? [],finishedAt:new Date().toISOString()}) + '\n', {mode:0o600});
+            await writeFile(join(directory,'receipt.json'),JSON.stringify(result.receipt,null,2),{mode:0o600});
+          }
+          if (restored.outcome === 'completed' && !exec.signal.aborted && Date.now() < deadline) {
+            const receipt = { ...result.receipt, status:'completed', businessOutcome:businessOutcome(result.entry.execution,restored.output), recovered:true, finishedAt:new Date().toISOString(), outputDigest:'sha256:' + createHash('sha256').update(JSON.stringify(restored.output)).digest('hex') };
+            if (receipt.runId) await writeFile(join(tracesRoot, receipt.runId, 'resolved.json'), JSON.stringify({receipt,output:restored.output}), {mode:0o600});
+            return {status:'completed',...service.delivery(restored.output,receipt),receipt};
+          }
+          const failureCode = result.failure.observedNativeFailures?.at(-1)?.code ?? result.failure.code;
+          return {status:'blocked',error:{category:result.failure.category,code:result.failure.code,recovery:{category:restored.category,code:restored.reason},originalFailure:result.failure,message:`Execution failed (${failureCode}); internal recovery could not complete the task (${restored.reason}). Inspect the retained execution records.`},receipt:result.receipt};
+        }
         const receipt = json(result.receipt);
-        return result.ok ? { status: 'completed', output: result.output, receipt }
-          : { status: 'blocked', error: { ...result.failure, message: 'Execution failed; inspect the retained execution record before retrying.' }, receipt };
+        return result.ok ? { status: 'completed', ...service.delivery(result.output,receipt), receipt }
+          : { status: 'blocked', error: { ...result.failure, message: result.failure.code === 'PLATFORM_UNSUPPORTED'
+            ? `${result.failure.capability} does not support ${result.failure.platform}. ${result.failure.compatibility.limitations}`
+            : 'Execution failed; inspect the retained execution record before retrying.' }, receipt };
       } finally { hostExecutions.delete(exec); }
     },
     async readTrace(runId, exec) {
@@ -319,14 +410,19 @@ export function createNativeExecutionService(ctx, store, {
       const receipt = JSON.parse(await readFile(join(directory, 'receipt.json'), 'utf8'));
       return { header, events, receipt };
     },
-    async run({ name, input, expectedRevisionId, timeoutMs: remainingTimeout, deadline }, exec) {
+    async run({ name, input, expectedRevisionId, snapshotRevisionId, timeoutMs: remainingTimeout, deadline }, exec) {
       let bundle;
-      try { bundle = await store.loadBundle(name, { signal: exec.signal }); }
+      try { bundle = snapshotRevisionId ? await store.loadSnapshotBundle(name,snapshotRevisionId,{signal:exec.signal}) : await store.loadBundle(name, { signal: exec.signal }); }
       catch (error) { return { ok: false, failure: { code: 'CAPABILITY_LOAD_FAILED', category: 'internal', stage: 'dependency', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } }; }
       if (!bundle) return { ok: false, failure: { code: 'CAPABILITY_UNAVAILABLE', category: 'external', stage: 'admission', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } };
       if (expectedRevisionId !== undefined && bundle.root.revisionId !== expectedRevisionId) throw new Error('Capability version changed before execution; reopen it before executing');
+      const incompatible = bundle.entries.find(entry => entry.compatibility && !entry.compatibility.platforms.includes(process.platform));
+      if (incompatible) return { ok: false, entry: bundle.root,
+        failure: { code: 'PLATFORM_UNSUPPORTED', category: 'external', stage: 'admission', retryable: false,
+          platform: process.platform, capability: incompatible.name, compatibility: incompatible.compatibility },
+        receipt: { status: 'blocked', capability: { name }, steps: [], constraints } };
       const result = await perform(bundle.root.execution, input, exec, bundle.root, { bundleEntries: bundle.entries, ...(remainingTimeout === undefined ? {} : { timeoutMs: remainingTimeout }), ...(deadline === undefined ? {} : { deadline }) });
-      return { ...result, entry: bundle.root };
+      return { ...result, entry: bundle.root, ...(!result.ok ? { failureGuides: recoveryGuides(bundle.entries, result.receipt, result.failure), resourceEntries:bundle.entries.filter(entry => entry.resources) } : {}) };
     },
     runImplementation(execution, input, exec, options = {}) {
       return perform(execution, input, exec, { name: options.name ?? 'recovery-implementation', version: options.version,

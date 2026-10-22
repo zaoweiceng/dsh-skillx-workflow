@@ -1,10 +1,84 @@
 import { Script } from 'node:vm';
+import { parse } from 'acorn';
 import { assertSupportedJsonSchema, assertObjectJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools';
 
 const MAX_SCHEMA_BYTES = 65536;
 const MAX_SCHEMA_DEPTH = 32;
 const MAX_PROGRAM_BYTES = 65536;
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+
+export function normalizeOutcome(outcome) {
+  if (outcome === undefined) return undefined;
+  if (!outcome || typeof outcome !== 'object' || Array.isArray(outcome) || Object.keys(outcome).some(key=>!['path','values','reasonPath'].includes(key))) throw new Error('Invalid execution.outcome declaration');
+  const pointer = value => typeof value==='string' && (value==='' || (value.startsWith('/') && !/~(?![01])/.test(value)));
+  if (!pointer(outcome.path) || (outcome.reasonPath!==undefined && !pointer(outcome.reasonPath)) || !outcome.values || typeof outcome.values!=='object' || Array.isArray(outcome.values) || !Object.keys(outcome.values).length || Object.entries(outcome.values).some(([key,value])=>!key || !['completed','blocked','failed','partial'].includes(value))) throw new Error('execution.outcome requires a JSON pointer path and values mapping reported scalar strings to completed/blocked/failed/partial');
+  return structuredClone(outcome);
+}
+
+export function businessOutcome(execution, output) {
+  const mapping = normalizeOutcome(execution?.outcome);
+  if (!mapping) return {status:'unknown'};
+  const read = path => {
+    let value=output;
+    for (const key of path === '' ? [] : path.slice(1).split('/').map(key=>key.replace(/~1/g,'/').replace(/~0/g,'~'))) {
+      if (value===null || typeof value!=='object' || !Object.hasOwn(value,key)) return undefined;
+      value=value[key];
+    }
+    return value;
+  };
+  const value=read(mapping.path);
+  const key = value===null ? 'null' : ['string','number','boolean'].includes(typeof value) ? String(value) : undefined;
+  const status = key!==undefined && Object.hasOwn(mapping.values,key) ? mapping.values[key] : 'unknown';
+  const reason = mapping.reasonPath!==undefined ? read(mapping.reasonPath) : undefined;
+  return {status,...(typeof reason==='string' ? {reason:reason.slice(0,2000)} : {})};
+}
+
+// DSH's enforced subset, not full JSON Schema. Keep authoring guidance beside
+// the validator boundary so every generation entry point uses the same rules.
+export const executionSchemaGuide = `Execution inputSchema and outputSchema use the DSH JSON Schema subset, NOT full JSON Schema. Allowed constraint keywords ONLY: type, oneOf, properties, required, additionalProperties, items, enum, const. Allowed annotations ONLY: title, description, default, examples. Each schema is an object; {} allows any JSON. type is ONE string: object|array|string|number|integer|boolean|null (never "json" or a type array). inputSchema root MUST have type:"object". properties maps field names to schemas; required is a unique array of declared property names; additionalProperties is boolean, never a schema. items is one schema, never a tuple array. enum/const are for type-matching scalar values only, not objects/arrays; enum is nonempty. oneOf requires at least two alternatives and exactly one must match; its siblings may only be annotations, never type or other constraints. Nullable example: {"oneOf":[{"type":"integer"},{"type":"null"}]}. Unsupported keywords include $schema, $ref, $defs, definitions, anyOf, allOf, not, nullable, format, pattern, minLength, maxLength, minimum, maximum, minItems, maxItems and uniqueItems. Enforce business bounds/patterns in the program instead of adding unsupported keywords. Every enforced bound, allowed combination, unit, default and fallback priority MUST be stated precisely in its public property description before invocation. A hard range is mandatory, never merely recommended; distinguish omitted, null, zero and explicit values. Do not infer a lookback window when the source can derive it from an identifier. default/examples are annotations only: defaults are NOT inserted into inputs. Give input properties Chinese title labels. Each input/output schema must be finite acyclic JSON, at most 64 KiB and depth 32. Program return values must also be lossless JSON: omit optional object properties instead of assigning undefined (including nested objects); arrays cannot contain undefined, and numbers cannot be NaN or Infinity. Multi-target output must omit single-target-only fields instead of setting them to undefined.`;
+
+// Inspect only literal native tool calls. This never evaluates the program.
+export function programToolNames(program) {
+  const names = new Set();
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'CallExpression' && node.callee?.object?.name === 'tools' && node.callee.property?.name === 'call') {
+      const field = node.arguments[0]?.properties?.find(property => (property.key?.name ?? property.key?.value) === 'name');
+      if (field?.value?.type === 'Literal' && typeof field.value.value === 'string') names.add(field.value.value);
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(parse('(async function(input, tools, capabilities, resources, processes) {\n' + program + '\n})', {ecmaVersion:'latest'}));
+  return [...names];
+}
+
+export function assertProgramResources(program, resources = {}) {
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'CallExpression' && node.callee?.object?.name === 'resources' && ['path','run'].includes(node.callee.property?.name ?? node.callee.property?.value)) {
+      const method=node.callee.property?.name ?? node.callee.property?.value;
+      const value = method==='path'?node.arguments[0]:node.arguments[0]?.properties?.find(property=>(property.key?.name ?? property.key?.value)==='path')?.value;
+      if (value?.type === 'Literal' && typeof value.value === 'string' && !Object.hasOwn(resources, value.value)) throw new Error('Program references an unbundled resource: ' + value.value);
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit(parse('(async function(input, tools, capabilities, resources, processes) {\n' + program + '\n})', {ecmaVersion:'latest'}));
+}
+
+export function normalizeCompatibility(value) {
+  if (value === undefined) return undefined; // Existing revisions have no declaration.
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['platforms', 'requirements', 'limitations'].includes(key))) throw new Error('Invalid compatibility declaration');
+  if (!Array.isArray(value.platforms) || !value.platforms.length || new Set(value.platforms).size !== value.platforms.length || value.platforms.some(platform => !['darwin', 'linux', 'win32'].includes(platform))) throw new Error('compatibility.platforms must list supported darwin/linux/win32 platforms');
+  if (!Array.isArray(value.requirements) || value.requirements.length > 16 || value.requirements.some(item => typeof item !== 'string' || !item.trim() || item.length > 500)) throw new Error('compatibility.requirements must list concrete runtime prerequisites');
+  if (typeof value.limitations !== 'string' || !value.limitations.trim() || value.limitations.length > 3000) throw new Error('compatibility.limitations must explain unsupported systems and verification limits');
+  return structuredClone(value);
+}
 
 function schemaSnapshot(schema, objectRoot) {
   const seen = new Set();
@@ -32,19 +106,31 @@ function schemaSnapshot(schema, objectRoot) {
 export function normalizeExecution(execution) {
   if (execution === undefined) return undefined;
   if (!execution || typeof execution !== 'object' || Array.isArray(execution)
-    || Object.keys(execution).some(key => !['language', 'inputSchema', 'outputSchema', 'program'].includes(key))) throw new Error('Invalid execution contract');
-  if (execution.language !== 'typescript') throw new Error('Execution language must be typescript (JavaScript subset)');
+    || Object.keys(execution).some(key => !['language', 'inputSchema', 'outputSchema', 'program','outcome'].includes(key))) throw new Error('Invalid execution contract');
+  if (!['typescript','python'].includes(execution.language)) throw new Error('Execution language must be typescript (JavaScript subset) or python');
   if (typeof execution.program !== 'string' || !execution.program.trim() || Buffer.byteLength(execution.program) > MAX_PROGRAM_BYTES) throw new Error('Execution program must be nonempty and at most 64 KiB');
-  const inputSchema = schemaSnapshot(execution.inputSchema, true);
-  const outputSchema = schemaSnapshot(execution.outputSchema, false);
+  const schemas = {};
+  const issues = [];
+  for (const [field, objectRoot] of [['inputSchema', true], ['outputSchema', false]]) {
+    try { schemas[field] = schemaSnapshot(execution[field], objectRoot); }
+    catch (error) {
+      for (const message of error.violations ?? [error.message]) {
+        issues.push({ code: error.code || 'INVALID_SCHEMA', path: '/' + field, field, message });
+      }
+    }
+  }
+  if (issues.length) throw Object.assign(new Error('Execution schemas are invalid; repair all reported input/output issues'), { code: 'EXECUTION_SCHEMA_INVALID', issues });
+  const { inputSchema, outputSchema } = schemas;
+  const outcome = normalizeOutcome(execution.outcome);
+  if(execution.language==='python'){if(execution.program.includes('\0'))throw new Error('Python entry must be UTF-8 text without NUL');return {language:'python',inputSchema,outputSchema,program:execution.program,...(outcome ? {outcome} : {})};}
   try {
-    new Script(`(async function(input, tools, capabilities) {\n"use strict";\n${execution.program}\n})`, { filename: 'native-capability-program.js' });
+    new Script(`(async function(input, tools, capabilities, resources, processes) {\n"use strict";\n${execution.program}\n})`, { filename: 'native-capability-program.js' });
     // Compile the body separately too: it cannot close the wrapper and add
     // unrelated statements. This constructs a function without invoking it.
-    new AsyncFunction('input', 'tools', 'capabilities', `"use strict";\n${execution.program}`);
+    new AsyncFunction('input', 'tools', 'capabilities', 'resources', 'processes', `"use strict";\n${execution.program}`);
   }
   catch { throw new Error('Execution program must parse as an async JavaScript function body; TypeScript-only syntax is unsupported'); }
-  return { language: 'typescript', inputSchema, outputSchema, program: execution.program };
+  return { language: 'typescript', inputSchema, outputSchema, program: execution.program,...(outcome ? {outcome} : {}) };
 }
 
 export function validateExecutionInput(execution, input) {

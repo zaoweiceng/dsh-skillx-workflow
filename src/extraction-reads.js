@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { acceptanceDigest } from './acceptance.js';
+import { draftDigest as hashDraft } from './generation-digest.js';
 
 export function selectDraftField(value, path) {
   if (typeof path !== 'string' || !path.startsWith('/') || path === '/') throw new Error('Read one explicit JSON pointer field, not the entire draft');
@@ -18,7 +18,7 @@ export function createExtractionReads(task, persist) {
   const fields = new Map();
   const remember = (identity, value, retain = false) => {
     if (retain) { fields.set(identity, JSON.parse(JSON.stringify(value))); fields.delete(identity+':fragments'); }
-    const key=identity+':'+acceptanceDigest(value);
+    const key=identity+':'+hashDraft(value);
     if (!seen.has(key)) {
       seen.add(key);
       task.readBytesDelivered=(task.readBytesDelivered || 0)+Buffer.byteLength(JSON.stringify(value));
@@ -39,26 +39,26 @@ export function createExtractionReads(task, persist) {
     invalidateDraft(draft) {
       const stale=new Set();
       for(const identity of fields.keys()) {
-        if(!identity.startsWith('acceptance:') || identity.startsWith('acceptance:__protocol__:')) continue;
-        const match=identity.match(/^acceptance:([^:]+):(\/.*)$/);
-        const collection=match && /^\/(?:execution|dependencies)(?:\/|$)/.test(match[2]) ? draft.candidates : draft.contracts;
+        if(!identity.startsWith('draft:') || identity.startsWith('draft:__protocol__:')) continue;
+        const match=identity.match(/^draft:([^:]+):(\/.*)$/);
+        const collection=draft.candidates;
         const item=match && Array.isArray(collection) && collection.find(item=>item?.name===match[1]);
         try {
           const current=selectDraftField(item,match?.[2]);
-          if(acceptanceDigest(current)!==acceptanceDigest(fields.get(identity))) stale.add(identity);
+          if(hashDraft(current)!==hashDraft(fields.get(identity))) stale.add(identity);
         } catch { stale.add(identity); }
       }
       for(const identity of stale) {
         fields.delete(identity);
         for(const key of seen) if(key.startsWith(identity+':')) seen.delete(key);
       }
-      for(const key of seen) if(/^acceptance:__(?!protocol__)/.test(key)) seen.delete(key);
+      for(const key of seen) if(/^draft:__(?!protocol__)/.test(key)) seen.delete(key);
     },
     read(identity, value, continuation = false) {
       // Optional metadata fields must be omitted, not exposed as undefined to DSH.
       value = JSON.parse(JSON.stringify(value));
       if (continuation) return value;
-      const digest = acceptanceDigest(value); const key = identity+':'+digest;
+      const digest = hashDraft(value); const key = identity+':'+digest;
       if (seen.has(key)) {
         task.duplicateReadsAvoided = (task.duplicateReadsAvoided || 0) + 1;
         return {alreadyRead:true,identity,digest,instruction:'Exact data is already in this phase context. Reuse it; do not request the same unchanged field again.'};
@@ -97,7 +97,7 @@ export function replaceExtractionContext(session, value) {
     const text=message.content.filter(block=>block.type==='text').map(block=>block.text).join('\n');
     let result;try {result=JSON.parse(text);} catch {if(message.isError) return [{tool,error:text}];return [];}
     if(message.isError || result?.fieldNotFound || result?.fieldTooLarge || result?.alreadyRead || result?.unrelated || result?.completeRecord===false) return [{tool,result}];
-    if(['submit_native_acceptance','submit_native_capabilities','submit_native_plan'].includes(tool)) {
+    if(['submit_native_capabilities','submit_native_plan'].includes(tool)) {
       const {saved,frozen,accepted,unchanged,draftDigest,validatedNames,instruction}=result;
       return [{tool,result:{saved,frozen,accepted,unchanged,draftDigest,validatedNames,instruction}}];
     }

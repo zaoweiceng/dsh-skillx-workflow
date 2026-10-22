@@ -38,10 +38,20 @@ window.__ModuleLoader__.load({
       zh: { skillx: 'SkillX', workflow: '工作流', extract: '总结工作流', refresh: '刷新', open: '打开完整管理页面', empty: '暂无内容', loading: '加载中…', running: '正在总结工作流…', completed: '工作流总结完成', skipped: '未发现值得提取的可复用能力', failed: '工作流总结失败', dismiss: '关闭', manual: '工作流仅在你选择“总结工作流”时生成。', priority: '同名能力优先使用 SkillX 或工作流。' },
       en: { skillx: 'SkillX', workflow: 'Workflows', extract: 'Summarize workflow', refresh: 'Refresh', open: 'Open management page', empty: 'No entries yet', loading: 'Loading…', running: 'Summarizing workflow…', completed: 'Workflow summary completed', skipped: 'No worthwhile reusable capability found', failed: 'Workflow summary failed', dismiss: 'Dismiss', manual: 'Workflows are generated only when you choose “Summarize workflow”.', priority: 'SkillX and workflows take precedence over skills with the same name.' },
     }
+    Object.assign(dictionaries.zh,{recoveryDiagnostics:'恢复诊断'})
+    Object.assign(dictionaries.en,{recoveryDiagnostics:'Recovery diagnostics'})
+    Object.assign(dictionaries.zh,{programCompleted:'程序已完成',programFailed:'程序执行失败',businessCompleted:'业务已完成',businessBlocked:'业务阻塞',businessFailed:'业务失败',businessPartial:'业务部分完成',businessUnknown:'业务结果未声明'})
+    Object.assign(dictionaries.en,{programCompleted:'Program completed',programFailed:'Program failed',businessCompleted:'Business completed',businessBlocked:'Business blocked',businessFailed:'Business failed',businessPartial:'Business partially completed',businessUnknown:'Business outcome undeclared'})
+    Object.assign(dictionaries.zh,{undeclaredBusiness:'次程序执行未声明业务结果，未计入业务成功或失败率'})
+    Object.assign(dictionaries.en,{undeclaredBusiness:'program executions have no declared business outcome and are excluded from business success/failure rates'})
+    Object.assign(dictionaries.zh, {snapshots:'历史快照',recycleBin:'回收站',snapshotOpen:'打开',rollback:'回退到此版本',restoreSnapshot:'恢复',currentVersion:'当前版本',snapshotIntro:'历史快照按原版本及依赖执行。回退会同步切换必要依赖，较新版本进入回收站；存在依赖冲突时会阻止操作。',trashIntro:'删除和回退移除的版本保留 30 天。恢复后可再次使用；若已有同名当前版本，恢复到历史快照。',deletedAt:'移入时间',deletionCountdown:'删除倒计时',snapshotVersions:'查看版本',purgedAt:'已彻底删除时间',purgedRecords:'彻底删除记录',rollbackWarning:'确认回退？将切换此能力及其必要依赖的版本，较新快照移入回收站。',confirmRollback:'确认回退',snapshotMode:'历史快照调用，不改变当前版本',rollbackUnavailable:'无法回退：当前版本已变化或依赖版本存在冲突。',dependencyRetention:'被保留快照依赖时延后清理。'})
+    Object.assign(dictionaries.en, {snapshots:'History snapshots',recycleBin:'Recycle bin',snapshotOpen:'Open',rollback:'Roll back to this version',restoreSnapshot:'Restore',currentVersion:'Current',snapshotIntro:'Run snapshots with their original locked dependencies. Rollback switches required dependencies and recycles newer versions; conflicts block rollback.',trashIntro:'Deleted and rolled-back versions remain for 30 days. Restore to history when a current version already exists.',deletedAt:'Recycled at',deletionCountdown:'Deletion in',snapshotVersions:'View versions',purgedAt:'Permanently deleted at',purgedRecords:'Permanent deletion records',rollbackWarning:'Roll back this capability and its required dependencies? Newer snapshots will move to the recycle bin.',confirmRollback:'Confirm rollback',snapshotMode:'Historical execution; current version is unchanged',dependencyRetention:'Cleanup is deferred while retained snapshots depend on this version.'})
     Object.assign(dictionaries.zh, { home: '首页', showOnHome: '在首页展示', homeEmpty: '暂无首页卡片，请在 SkillX 或工作流选项卡中打开“在首页展示”。', editHome: '编辑', finishEditing: '完成', reorderCard: '拖动排序', search: '按名称或描述筛选', noMatches: '没有匹配的内容', enabled: '启用', disabled: '停用', back: '返回', optimize: '优化', execution: '执行会话 ID（多个用逗号或空格分隔）', cancel: '取消任务', details: '详情', result: '查看提取结果', conversation: '查看提取对话' })
     Object.assign(dictionaries.en, { home: 'Home', showOnHome: 'Show on home', homeEmpty: 'No home cards yet. Turn on “Show on home” in the SkillX or Workflows tab.', editHome: 'Edit', finishEditing: 'Done', reorderCard: 'Drag to reorder', search: 'Filter by name or description', noMatches: 'No matching entries', enabled: 'Enabled', disabled: 'Disabled', back: 'Back', optimize: 'Optimize', execution: 'Execution session IDs (comma or space separated)', cancel: 'Cancel task', details: 'Details', result: 'View extraction result', conversation: 'View author conversation' })
-    Object.assign(dictionaries.zh, {"monitoring":"监控面板","tokens":"Token 消耗","success":"任务成功率","failure":"任务失败率","skillxCalls":"SkillX 调用量","workflowCalls":"Workflow 调用量","duration":"任务耗时排行","reasons":"失败原因排行","timeRange":"时间范围","custom":"自定义","hours":"小时","days":"天","start":"开始日期","end":"结束日期","invalidRange":"请选择有效日期，范围最多 366 天","trend":"趋势","noSamples":"无样本","rank":"排名","task":"任务","status":"状态","createdAt":"创建时间","reason":"失败原因","count":"次数","previous":"上一页","next":"下一页","unfinished":"未结束","blocked":"阻塞","cancelled":"已取消","queued":"排队中","sessions":"Session / 执行记录","records":"查看原始记录","runId":"执行 ID","monitoringIntro":"用量与执行质量。每个面板可独立选择时间。","callsBasis":"按原生顶层能力执行计数；不重复计算内部依赖与恢复。","tokensBasis":"原生能力执行及学习任务已上报的 Token；不包含普通对话及独立后台维护。","tasksBasis":"按创建时间统计能力执行和学习任务；取消与未结束任务不计入成功/失败率。","incompleteUsage":"个任务的用量未上报或不完整，仅汇总已知用量","skippedRecords":"条记录无法读取，未计入统计","sessionsBasis":"原生执行记录可分页查看工具参数、结果与结束状态；学习任务可打开 DSH 会话。敏感字段脱敏。"})
-    Object.assign(dictionaries.en, {"monitoring":"Monitoring","tokens":"Token usage","success":"Task success rate","failure":"Task failure rate","skillxCalls":"SkillX calls","workflowCalls":"Workflow calls","duration":"Task duration ranking","reasons":"Failure reasons","timeRange":"Time range","custom":"Custom","hours":" hours","days":" days","start":"Start date","end":"End date","invalidRange":"Choose valid dates spanning at most 366 days","trend":"Trend","noSamples":"No samples","rank":"Rank","task":"Task","status":"Status","createdAt":"Created at","reason":"Failure reason","count":"Count","previous":"Previous","next":"Next","unfinished":"Unfinished","blocked":"Blocked","cancelled":"Cancelled","queued":"Queued","sessions":"Session / execution records","records":"View raw records","runId":"Execution ID","monitoringIntro":"Usage and execution quality. Each panel has its own time range.","callsBasis":"Top-level native capability executions; excludes duplicate dependency and recovery calls.","tokensBasis":"Reported native execution and learning tokens; excludes ordinary chat and independent background maintenance.","tasksBasis":"Native executions and learning tasks by creation time; cancelled and unfinished tasks are excluded from rates.","incompleteUsage":"tasks have missing or incomplete usage; only known usage is summed","skippedRecords":"unreadable records excluded from statistics","sessionsBasis":"Page through native tool arguments, results and end states, or open the DSH learning session. Sensitive fields are redacted."})
+    Object.assign(dictionaries.zh, {"monitoring":"监控面板","tokens":"Token 消耗","success":"任务成功率","failure":"任务失败率","skillxCalls":"SkillX 调用量","workflowCalls":"Workflow 调用量","duration":"任务耗时排行","reasons":"失败原因排行","timeRange":"时间范围","custom":"自定义","hours":"小时","days":"天","start":"开始日期","end":"结束日期","invalidRange":"请选择有效日期，范围最多 366 天","trend":"趋势","noSamples":"无样本","rank":"排名","task":"任务","status":"状态","createdAt":"创建时间","reason":"失败原因","count":"次数","previous":"上一页","next":"下一页","unfinished":"未结束","blocked":"阻塞","cancelled":"已取消","queued":"排队中","sessions":"Session / 执行记录","records":"查看原始记录","runId":"执行 ID","callsBasis":"按原生顶层能力执行计数；不重复计算内部依赖与恢复。","tokensBasis":"原生能力执行及学习任务已上报的 Token；不包含普通对话及独立后台维护。","tasksBasis":"按创建时间统计能力执行和学习任务；取消与未结束任务不计入成功/失败率。","incompleteUsage":"个任务的用量未上报或不完整，仅汇总已知用量","skippedRecords":"条记录无法读取，未计入统计","sessionsBasis":"原生执行记录可分页查看工具参数、结果与结束状态；学习任务可打开 DSH 会话。敏感字段脱敏。"})
+    Object.assign(dictionaries.en, {"monitoring":"Monitoring","tokens":"Token usage","success":"Task success rate","failure":"Task failure rate","skillxCalls":"SkillX calls","workflowCalls":"Workflow calls","duration":"Task duration ranking","reasons":"Failure reasons","timeRange":"Time range","custom":"Custom","hours":" hours","days":" days","start":"Start date","end":"End date","invalidRange":"Choose valid dates spanning at most 366 days","trend":"Trend","noSamples":"No samples","rank":"Rank","task":"Task","status":"Status","createdAt":"Created at","reason":"Failure reason","count":"Count","previous":"Previous","next":"Next","unfinished":"Unfinished","blocked":"Blocked","cancelled":"Cancelled","queued":"Queued","sessions":"Session / execution records","records":"View raw records","runId":"Execution ID","callsBasis":"Top-level native capability executions; excludes duplicate dependency and recovery calls.","tokensBasis":"Reported native execution and learning tokens; excludes ordinary chat and independent background maintenance.","tasksBasis":"Native executions and learning tasks by creation time; cancelled and unfinished tasks are excluded from rates.","incompleteUsage":"tasks have missing or incomplete usage; only known usage is summed","skippedRecords":"unreadable records excluded from statistics","sessionsBasis":"Page through native tool arguments, results and end states, or open the DSH learning session. Sensitive fields are redacted."})
+    Object.assign(dictionaries.zh, { compatibility: '运行兼容性', supportedSystems: '支持系统', runtimeRequirements: '运行依赖', compatibilityUnknown: '此旧版能力尚未声明系统兼容性。' })
+    Object.assign(dictionaries.en, { compatibility: 'Runtime compatibility', supportedSystems: 'Supported systems', runtimeRequirements: 'Requirements', compatibilityUnknown: 'This legacy capability has no platform compatibility declaration.' })
     Object.assign(dictionaries.zh, { elapsed: '耗时', executionSettled: '执行已完成', statusCompleted: '成功', statusFailed: '失败', statusRunning: '运行中' })
     Object.assign(dictionaries.en, { elapsed: 'Duration', executionSettled: 'Execution settled', statusCompleted: 'Succeeded', statusFailed: 'Failed', statusRunning: 'Running' })
     Object.assign(dictionaries.zh, { savings: '预计 Token 节省', savingsBasis: '原始提取会话平均用量 × 成功复用次数 − 执行用量。按任务规模相当估算；不含调用方对话、提取及后台维护成本。负值表示额外消耗。', baselineTotal: '原始流程估算', executionTotal: '执行用量', estimatedRate: '估算节省率', estimatedRuns: '已估算执行', excludedRuns: '缺少基线或完整用量' })
@@ -50,8 +60,8 @@ window.__ModuleLoader__.load({
     Object.assign(dictionaries.en, { recordingFailed: 'Execution settled; session recording failed', fillObject: 'Fill object', optionalParameters: 'Optional parameters', execute: 'Execute', runConfig: 'Run configuration', formInput: 'Form input', jsonInput: 'JSON input', invalidJson: 'Enter valid JSON', chooseValue: 'Select a value', yes: 'Yes', no: 'No', addItem: 'Add item', removeItem: 'Remove item', dag: 'Workflow DAG', graphInput: 'Input', graphOutput: 'Output', graphNodes: 'nodes', graphBoundary: 'Input / output', graphStage: 'Stage', graphStagesNote: 'Stage overview; branches and loops execute inside stages.', graphProgramNote: 'This program has no separate stages; shown as one execution unit.', graphDependencies: 'Declared dependencies', needsContract: 'This legacy capability needs an executable contract. Generate it from existing evidence without entering a session ID.', prepareContract: 'Generate execution interface', preparingContract: 'Generating execution interface…', noParameters: 'No input parameters required', runtimeOptions: 'Runtime options', workingDirectory: 'Working directory', defaultDirectory: 'Use the host process working directory', disabledExecution: 'Enable this capability in the list before executing.', runHistory: 'Execution history', noRuns: 'Submit parameters to see execution results here.', executionSession: 'Open execution session', reasoningSession: 'Open LLM node session', capabilityNotes: 'Capability notes and source', interrupted: 'Interrupted', cancelling: 'Cancelling', contractPrepared: 'Execution interface ready', contractFailed: 'Execution interface generation failed', statisticsInfo: 'Statistics details', shortSavings: 'Estimated savings rate', shortCoverage: 'executions', missingComparison: 'executions not estimated' })
     Object.assign(dictionaries.zh, {sessionNotReady:'会话尚未创建，请稍后重试'})
     Object.assign(dictionaries.en, {sessionNotReady:'Session is not ready yet. Try again shortly.'})
-    Object.assign(dictionaries.zh, { deleteEntry: '删除', confirmDelete: '确认删除', deleteWarning: '删除后将从能力目录移除，历史执行记录保留。', deleteInUse: '无法删除，以下能力依赖此项：', deleteChanged: '能力已更新，请刷新后再删除。' })
-    Object.assign(dictionaries.en, { deleteEntry: 'Delete', confirmDelete: 'Confirm deletion', deleteWarning: 'Remove from the catalog; retain execution history.', deleteInUse: 'Cannot delete; referenced by: ', deleteChanged: 'Capability changed. Refresh before deleting.' })
+    Object.assign(dictionaries.zh, { deleteEntry: '删除', confirmDelete: '确认删除', deleteWarning: '删除后此能力及其历史快照进入回收站，30 天后自动清理，可在到期前恢复。执行与提取记录保留。', deleteInUse: '无法删除，以下能力依赖此项：', deleteChanged: '能力已更新，请刷新后再删除。' })
+    Object.assign(dictionaries.en, { deleteEntry: 'Delete', confirmDelete: 'Confirm deletion', deleteWarning: 'Move this capability and its history to the recycle bin for 30 days. Execution and extraction records are retained.', deleteInUse: 'Cannot delete; referenced by: ', deleteChanged: 'Capability changed. Refresh before deleting.' })
     Object.assign(dictionaries.zh, { extractionModel:'提取模型', extractionModelIntro:'配置 SkillX 和工作流提取、优化使用的模型。默认使用 DSH DeepSeek Flash 的 Low 推理档位；复杂工作流可选择更高推理档位。保存后用于新启动的任务。', authoringModel:'模型', authoringEffort:'推理档位', saveExtractionModel:'保存配置', extractionModelSaved:'配置已保存', unavailableSelection:'已保存的模型或推理档位当前不可用，请重新选择并保存。', missingDefaultModel:'默认的 DeepSeek Flash / Low 当前不可用，请选择模型和推理档位并保存。', chooseModel:'请选择模型', chooseEffort:'请选择推理档位', defaultEffort:'模型默认', invalidExtractionModel:'所选模型或推理档位当前不可用，请刷新后重新选择。' })
     Object.assign(dictionaries.en, { extractionModel:'Extraction model', extractionModelIntro:'Choose the model for SkillX and workflow extraction and optimization. Defaults to DSH DeepSeek Flash with Low reasoning. Higher reasoning levels are available for complex workflows. Saved settings apply to newly started tasks.', authoringModel:'Model', authoringEffort:'Reasoning level', saveExtractionModel:'Save settings', extractionModelSaved:'Settings saved', unavailableSelection:'The saved model or reasoning level is no longer available. Choose and save a new selection.', missingDefaultModel:'The default DeepSeek Flash / Low is unavailable. Choose and save a model and reasoning level.', chooseModel:'Select a model', chooseEffort:'Select a reasoning level', defaultEffort:'Model default', invalidExtractionModel:'The selected model or reasoning level is unavailable. Refresh and choose again.' })
     const box = { padding: 16, height: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden', color: 'var(--dsw-alias-label-primary)' }
@@ -69,7 +79,7 @@ window.__ModuleLoader__.load({
     }
     return {
       name: 'dsh-skillx-workflow/client',
-      inject: ['slots', 'locale', 'uiWorkspace'],
+      inject: ['slots', 'locale', 'uiWorkspace', 'sessions'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, dictionaries))
         const t = ctx.locale.bind(NS)
@@ -276,6 +286,7 @@ window.__ModuleLoader__.load({
           const [error, setError] = React.useState('')
           const [runs, setRuns] = React.useState([])
           const [revision, setRevision] = React.useState(0)
+          const [recordId, setRecordId] = React.useState(null)
           const request = React.useRef(null)
           const submitting = React.useRef(false)
           React.useEffect(() => {
@@ -295,7 +306,7 @@ window.__ModuleLoader__.load({
             event.preventDefault(); if (submitting.current || active) return
             let values
             try { values = jsonMode ? JSON.parse(raw) : input } catch { setError(t('invalidJson')); return }
-            const payload = { name: entry.name, revisionId: entry.revisionId, input: values, ...(cwd.trim() ? { cwd: cwd.trim() } : {}) }
+            const payload = { name: entry.name, revisionId: entry.revisionId, ...(entry.historical?{historical:true}:{}), input: values, ...(cwd.trim() ? { cwd: cwd.trim() } : {}) }
             const fingerprint = JSON.stringify(payload)
             if (request.current?.fingerprint !== fingerprint) request.current = { fingerprint, key: crypto.randomUUID() }
             submitting.current = true; setBusy(true); setError('')
@@ -311,13 +322,19 @@ window.__ModuleLoader__.load({
           return h('article', { className: 'sxw-detail' },
             h(Button, { variant: 'ghost', size: 'sm', onClick: onBack, style: { paddingLeft: 0, marginBottom: 16 } }, '← ' + t('back')),
             h('header', { style: { marginBottom: 24 } },
-              h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' } }, h('h2', { style: { fontSize: 22, margin: 0, overflowWrap: 'anywhere' } }, entry.name), h('span', { style: { ...note, background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 6, padding: '2px 8px' } }, 'v' + entry.version), h(DeleteEntry, { entry, onDeleted })),
-              h('p', { style: { ...note, fontSize: 14, marginBottom: 0 } }, displayDescription(entry.description))),
+              h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' } }, h('h2', { style: { fontSize: 22, margin: 0, overflowWrap: 'anywhere' } }, entry.name), h('span', { style: { ...note, background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 6, padding: '2px 8px' } }, 'v' + entry.version), !entry.historical && h(DeleteEntry, { entry, onDeleted })),
+              h('p', { style: { ...note, fontSize: 14, marginBottom: 0 } }, displayDescription(entry.description)), entry.historical && h('p', {style:note}, t('snapshotMode'))),
+            h('section', { style: { ...card, marginBottom: 20 } },
+              h('h3', { style: { fontSize: 15, margin: '0 0 12px' } }, t('compatibility')),
+              entry.compatibility ? h(React.Fragment, null,
+                h('p', { style: note }, t('supportedSystems') + ': ' + entry.compatibility.platforms.map(platform => ({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' })[platform]).join(' / ')),
+                entry.compatibility.requirements.length > 0 && h('p', { style: note }, t('runtimeRequirements') + ': ' + entry.compatibility.requirements.join(' · ')),
+                h('p', { style: note }, entry.compatibility.limitations)) : h('p', { style: note }, t('compatibilityUnknown'))),
             error && h('p', { role: 'alert' }, error),
             h('div', { className: entry.kind === 'workflow' && entry.execution ? 'sxw-execute-layout' : undefined },
             h('section', { style: { ...card, marginBottom: 20 } },
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18 } }, h('h3', { style: { fontSize: 15, margin: 0 } }, t('runConfig')), entry.execution && h(Button, { variant: 'ghost', size: 'sm', disabled: active, onClick: switchMode }, t(jsonMode ? 'formInput' : 'jsonInput'))),
-              !entry.execution ? h('div', null, h('p', { style: note }, t('needsContract')), h(Button, { variant: 'ghost', size: 'sm', disabled: preparing || entry.enabled === false, onClick: () => runTask('prepare', { name: entry.name }) }, t(preparing ? 'preparingContract' : 'prepareContract'))) :
+              !entry.execution ? h('div', null, h('p', { style: note }, t('needsContract')), h(Button, { variant: 'ghost', size: 'sm', disabled: preparing || entry.enabled === false || entry.historical, onClick: () => runTask('prepare', { name: entry.name }) }, t(preparing ? 'preparingContract' : 'prepareContract'))) :
                 h('form', { onSubmit: execute },
                   h('fieldset', { disabled: active || entry.enabled === false, style: { border: 0, padding: 0, margin: 0, minWidth: 0 } },
                     jsonMode ? h('textarea', { 'aria-label': t('jsonInput'), value: raw, onInput: event => setRaw(event.currentTarget.value), rows: 10, style: { ...control, width: '100%', fontFamily: 'ui-monospace, monospace', resize: 'vertical' } }) : h('div', { className: 'sxw-input-grid' },
@@ -332,18 +349,21 @@ window.__ModuleLoader__.load({
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 } }, h('h3', { style: { fontSize: 15, margin: 0 } }, t('runHistory')), h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRevision(value => value + 1) }, t('refresh'))),
               !runs.length && h('p', { style: note }, t('noRuns')),
               runs.map(job => h('div', { key: job.id, style: { padding: '14px 0', borderTop: '1px solid var(--sxw-divider)' } },
-                h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 } }, h('strong', { style: { fontSize: 13 } }, statusLabel(job.status)), h('span', { style: note }, new Date(job.createdAt).toLocaleString()),
-                  job.sessionId && h(Button, { variant: 'ghost', size: 'sm', onClick: () => ctx.uiWorkspace.openSession(job.sessionId) }, t('executionSession')),
-                  (job.relatedSessions || []).map((sessionId, index) => h(Button, { key: sessionId, variant: 'ghost', size: 'sm', onClick: () => ctx.uiWorkspace.openSession(sessionId) }, t('reasoningSession') + ' ' + (index + 1))),
+                h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 } }, h('strong', { style: { fontSize: 13 } }, executionStatus(job)), h('span', { style: note }, new Date(job.createdAt).toLocaleString()),
+                  job.receipt?.runId && h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRecordId(job.receipt.runId) }, t('records')),
+                  job.sessionId && h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setError(''); return openRecordedSession({sessionId:job.sessionId},setError) } }, t('executionSession')),
+                  (job.relatedSessions || []).map((sessionId, index) => h(Button, { key: sessionId, variant: 'ghost', size: 'sm', onClick: () => { setError(''); return openRecordedSession({sessionId},setError) } }, t('reasoningSession') + ' ' + (index + 1))),
                   ['queued', 'running', 'cancelling'].includes(job.status) && h(Button, { variant: 'ghost', size: 'sm', disabled: job.status === 'cancelling', onClick: async () => { try { await api('runs/' + encodeURIComponent(job.id) + '/cancel', { method: 'POST' }); setRevision(value => value + 1) } catch (error) { setError(error.message) } } }, t('cancel'))),
                 job.recordingError && h('p', { role: 'alert', style: note }, t('recordingFailed') + ': ' + job.recordingError),
                 job.error && h('p', { role: 'alert', style: { fontSize: 13, overflowWrap: 'anywhere' } }, job.error.message || JSON.stringify(job.error)),
+                job.businessOutcome?.reason && h('p',{role:'status',style:note},job.businessOutcome.reason),
                 job.output !== undefined && h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12, background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 8, padding: 12 } }, JSON.stringify(job.output, null, 2))))),
             h('details', { style: { ...card, marginBottom: 20 } }, h('summary', { style: { cursor: 'pointer', fontSize: 13, fontWeight: 500 } }, t('capabilityNotes')),
-              entry.generatorSessionId && h(Button, { variant: 'ghost', size: 'sm', style: { marginTop: 12 }, onClick: () => ctx.uiWorkspace.openSession(entry.generatorSessionId) }, t('conversation')),
-              h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7 } }, entry.content)))
+              entry.generatorSessionId && h(Button, { variant: 'ghost', size: 'sm', style: { marginTop: 12 }, onClick: () => { setError(''); return openRecordedSession({sessionId:entry.generatorSessionId},setError) } }, t('conversation')),
+              h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7 } }, entry.content)),
+            recordId && h(RecordDialog,{id:recordId,onClose:()=>setRecordId(null)}))
         }
-        const metricKeys = ['savings', 'success', 'failure', 'skillxCalls', 'workflowCalls', 'duration', 'reasons']
+        const metricKeys = ['savings', 'success', 'skillxCalls', 'workflowCalls', 'duration', 'reasons']
         const metricRoute = key => ({ skillxCalls: 'skillx', workflowCalls: 'workflow' })[key] || key
         function recent(hours) { const end = new Date(); return { start: new Date(+end - hours * 3600000).toISOString(), end: end.toISOString() } }
         function RangeControl({ value, onChange, hourly }) {
@@ -404,6 +424,12 @@ window.__ModuleLoader__.load({
             h(Button, { variant: 'ghost', size: 'sm', disabled: (page + 1) * size >= total, onClick: () => onChange(page + 1) }, t('next')))
         }
         function statusLabel(status) { return ({ completed: t('executionSettled'), failed: t('statusFailed'), running: t('statusRunning') })[status] || t(status) }
+        function executionStatus(row) {
+          if (['queued','running','cancelling','cancelled','interrupted','unfinished'].includes(row.programStatus ?? row.status)) return statusLabel(row.programStatus ?? row.status)
+          const program = row.programStatus ?? (row.status==='completed' ? 'completed' : 'failed')
+          const business = row.businessOutcome?.status ?? 'unknown'
+          return t(program==='completed' ? 'programCompleted' : 'programFailed') + ' · ' + t(({completed:'businessCompleted',blocked:'businessBlocked',failed:'businessFailed',partial:'businessPartial'})[business] || 'businessUnknown')
+        }
         async function openRecordedSession(row, onError) {
           try {
             let sessionId = row.sessionId
@@ -413,6 +439,9 @@ window.__ModuleLoader__.load({
               if (!sessionId && !['queued', 'running'].includes(task.status)) sessionId = task.generatorSessionId
             }
             if (!sessionId) throw new Error(t('sessionNotReady'))
+            // Disposing a generation scope removes its live catalog entry. Reload
+            // persisted sessions before navigation so completed phases remain openable.
+            await ctx.sessions.refresh()
             await ctx.uiWorkspace.openSession(sessionId)
           } catch (error) {
             if (onError) onError(error.message)
@@ -420,8 +449,7 @@ window.__ModuleLoader__.load({
           }
         }
         function sessionButton(row) { return row.sessionId ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => openRecordedSession(row) }, row.name) : row.name }
-        function MetricPanel({ metric, revision }) {
-          const [range, setRange] = React.useState({ choice: 24, start: '', end: '' })
+        function MetricPanel({ metric, revision, range, setRange }) {
           const [page, setPage] = React.useState(0)
           const { data, loading, error } = useMonitoring('monitoring/metrics/' + metricRoute(metric), range, revision)
           React.useEffect(() => setPage(0), [range, revision])
@@ -430,7 +458,7 @@ window.__ModuleLoader__.load({
             h(RangeControl, { value: range, onChange: setRange, hourly: metric === 'savings' }),
             loading ? h('p', { role: 'status', style: note }, t('loading')) : error ? h('p', { role: 'alert' }, error) : data && h(React.Fragment, null,
               metric === 'duration' ? h(React.Fragment, null,
-                h(Table, { columns: [['rank', 'rank', (_row, index) => page * 5 + index + 1], ['name', 'task', sessionButton], ['status', 'status', row => row.outcome === 'skipped' ? t('skipped') : statusLabel(row.status)], ['durationMs', 'elapsed', row => formatted('duration', row.durationMs)], ['createdAt', 'createdAt', row => new Date(row.createdAt).toLocaleString()]], rows: (data.ranking || []).slice(page * 5, page * 5 + 5) }),
+                h(Table, { columns: [['rank', 'rank', (_row, index) => page * 5 + index + 1], ['name', 'task', sessionButton], ['status', 'status', row => row.type === 'execution' ? executionStatus(row) : row.outcome === 'skipped' ? t('skipped') : statusLabel(row.status)], ['durationMs', 'elapsed', row => formatted('duration', row.durationMs)], ['createdAt', 'createdAt', row => new Date(row.createdAt).toLocaleString()]], rows: (data.ranking || []).slice(page * 5, page * 5 + 5) }),
                 h(Pager, { page, total: data.ranking?.length || 0, size: 5, onChange: setPage })) : metric === 'reasons' ? h(React.Fragment, null,
                 h(Table, { columns: [['reason', 'reason'], ['count', 'count']], rows: (data.items || []).slice(page * 5, page * 5 + 5) }), h(Pager, { page, total: data.items?.length || 0, size: 5, onChange: setPage })) : h(React.Fragment, null,
                 h('div', { style: { fontSize: 30, fontWeight: 600, margin: '12px 0' }, title: data.value == null ? undefined : String(data.value) }, (metric === 'savings' && data.value != null ? '≈ ' : '') + formatted(metric, data.value)),
@@ -441,6 +469,7 @@ window.__ModuleLoader__.load({
                 h('p', { style: { marginBottom: 0 } }, t(['skillxCalls', 'workflowCalls'].includes(metric) ? 'callsBasis' : metric === 'savings' ? 'savingsBasis' : 'tasksBasis')),
                 metric === 'savings' && data.estimatedExecutions > 0 && h('p', { style: { marginBottom: 0 } }, t('baselineTotal') + ': ' + formatted('savings', data.baselineTokens) + ' · ' + t('executionTotal') + ': ' + formatted('savings', data.executionTokens)),
                 !!data.incompleteTasks && h('p', null, data.incompleteTasks + ' ' + t('incompleteUsage'))),
+              ['success','failure'].includes(metric) && data.undeclaredBusinessTasks > 0 && h('p',{role:'status',style:note},data.undeclaredBusinessTasks + ' ' + t('undeclaredBusiness')),
               !!data.skippedRecords && h('p', { role: 'status', style: note }, data.skippedRecords + ' · ' + t('skippedRecords'))))
         }
         function Records({ id }) {
@@ -452,8 +481,19 @@ window.__ModuleLoader__.load({
               h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRevision(value => value + 1) }, t('refresh')),
               h(Button, { variant: 'ghost', size: 'sm', disabled: offset === 0 || loading, onClick: () => setOffset(Math.max(0, offset - 50)) }, t('previous')),
               h(Button, { variant: 'ghost', size: 'sm', disabled: data?.nextOffset == null || loading, onClick: () => setOffset(data.nextOffset) }, t('next'))),
-            loading ? h('p', { role: 'status' }, t('loading')) : error ? h('p', { role: 'alert' }, error) : data?.items.map((item, index) => h('details', { key: offset + index, style: { marginTop: 12 } },
-              h('summary', null, (offset + index + 1) + ' · ' + item.type), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12 } }, JSON.stringify(item, null, 2)))))
+            loading ? h('p', { role: 'status' }, t('loading')) : error ? h('p', { role: 'alert' }, error) : data && h(React.Fragment,null,
+              data.receipt && h('p',{role:'status'},executionStatus({programStatus:data.receipt.status,businessOutcome:data.receipt.businessOutcome})),
+              data.items.filter(item=>item.type==='dispatch/end' && item.status==='failed').map((item,index)=>h('p',{key:'failure:'+index,role:'alert',style:{overflowWrap:'anywhere'}},item.code + ': ' + (item.error?.message || ''))),
+              (data.recovery || []).map(record=>h('details',{key:record.sessionId,style:{marginTop:12}},h('summary',null,t('recoveryDiagnostics') + ' · ' + statusLabel(record.status)),h('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:12}},JSON.stringify(record,null,2)))),
+              data.items.map((item, index) => h('details', { key: offset + index, style: { marginTop: 12 } },
+                h('summary', null, (offset + index + 1) + ' · ' + item.type), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 12 } }, JSON.stringify(item, null, 2))))))
+        }
+        function RecordDialog({id,onClose}) {
+          const dialog = React.useRef(null)
+          React.useEffect(() => { const element=dialog.current; element?.showModal(); return () => element?.close() }, [])
+          return h('dialog',{ref:dialog,'aria-label':t('records'),onCancel:onClose,style:{width:'min(1000px, calc(100vw - 48px))',maxHeight:'85vh',overflow:'auto',padding:24,border:'1px solid var(--sxw-divider)',borderRadius:12,background:'var(--dsw-alias-background-primary, #fff)',color:'var(--dsw-alias-label-primary)'}},
+            h('div',{style:{display:'flex',alignItems:'center',gap:12}},h('h3',{style:{flex:1,margin:0}},t('records')),h(Button,{variant:'ghost',size:'sm',onClick:onClose},t('dismiss'))),
+            h('p',{style:{...note,overflowWrap:'anywhere'}},id),h(Records,{key:id,id}))
         }
         function Sessions({ revision }) {
           const [range, setRange] = React.useState({ choice: 24, start: '', end: '' })
@@ -467,16 +507,19 @@ window.__ModuleLoader__.load({
             h('p', { style: note }, t('sessionsBasis')),
             openError && h('p', { role:'alert' }, openError),
             loading ? h('p', { role: 'status' }, t('loading')) : error ? h('p', { role: 'alert' }, error) : data && h(React.Fragment, null,
-              h(Table, { columns: [['createdAt', 'createdAt', row => new Date(row.createdAt).toLocaleString()], ['name', 'task', sessionButton], ['status', 'status', row => row.outcome === 'skipped' ? t('skipped') : statusLabel(row.status)], ['id', 'runId'], ['action', 'details', row => row.type === 'execution' ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => setSelected(selected === row.id ? null : row.id) }, t('records')) : h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setOpenError(''); return openRecordedSession(row, setOpenError) } }, t('conversation'))]], rows: data.items }),
+              h(Table, { columns: [['createdAt', 'createdAt', row => new Date(row.createdAt).toLocaleString()], ['name', 'task', sessionButton], ['status', 'status', row => row.type === 'execution' ? executionStatus(row) : row.outcome === 'skipped' ? t('skipped') : statusLabel(row.status)], ['id', 'runId'], ['action', 'details', row => row.type === 'execution' ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => setSelected(selected === row.id ? null : row.id) }, t('records')) : h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setOpenError(''); return openRecordedSession(row, setOpenError) } }, t('conversation'))]], rows: data.items }),
               h(Pager, { page, total: data.total, size: 30, onChange: value => { setPage(value); setSelected(null) } })),
-            selected && h('div', null, h(Button, { variant: 'ghost', size: 'sm', onClick: () => setSelected(null) }, t('dismiss')), h(Records, { key: selected, id: selected })))
+            selected && h(RecordDialog,{id:selected,onClose:()=>setSelected(null)}))
         }
-        function Monitoring() {
-          const [revision, setRevision] = React.useState(0)
+        function Monitoring({ ranges, setRanges, revision }) {
           return h('section', { className: 'sxw-monitor', style: { padding: 24, overflow: 'auto', height: '100%', boxSizing: 'border-box' }, 'aria-label': t('monitoring') },
-            h('style', null, '.sxw-monitor>header,.sxw-monitor-grid{width:100%;max-width:1200px;margin-left:auto;margin-right:auto}.sxw-monitor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:20px}@media(max-width:760px){.sxw-monitor{padding:16px!important}.sxw-monitor-grid{grid-template-columns:minmax(0,1fr)}}'),
-            h('header', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 } }, h('p', { style: { ...note, flex: 1, margin: 0 } }, t('monitoringIntro')), h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRevision(value => value + 1) }, t('refresh'))),
-            h('div', { className: 'sxw-monitor-grid' }, metricKeys.map(metric => h(MetricPanel, { key: metric, metric, revision }))))
+            h('style', null, '.sxw-monitor-grid{width:100%;max-width:1200px;margin-left:auto;margin-right:auto}.sxw-monitor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:20px}@media(max-width:760px){.sxw-monitor{padding:16px!important}.sxw-monitor-grid{grid-template-columns:minmax(0,1fr)}}'),
+            h('div', { className: 'sxw-monitor-grid' }, metricKeys.map(metric => h(MetricPanel, { key: metric, metric, revision,
+              range: ranges[metric] || { choice: 24, start: '', end: '' },
+              setRange: update => setRanges(previous => {
+                const range = previous[metric] || { choice: 24, start: '', end: '' }
+                return { ...previous, [metric]: typeof update === 'function' ? update(range) : update }
+              }) }))))
         }
         function ExecutionHistory() {
           const [revision, setRevision] = React.useState(0)
@@ -522,22 +565,92 @@ window.__ModuleLoader__.load({
               h(Button, {type:'submit',disabled:busy || !selected || !selection?.reasoningEffort}, t('saveExtractionModel')),
               saved && h('p', {role:'status'}, t('extractionModelSaved')))))
         }
+        function SnapshotPage({recycled=false}) {
+          const [data,setData]=React.useState(null),[error,setError]=React.useState(''),[busy,setBusy]=React.useState(false),[entry,setEntry]=React.useState(null),[query,setQuery]=React.useState(''),[confirming,setConfirming]=React.useState(null)
+          const [selected,setSelected]=React.useState(null),[clock,setClock]=React.useState(Date.now)
+          async function reload(){setError('');try{setData(await api('snapshots'))}catch(error){setError(error.message)}}
+          React.useEffect(()=>{let active=true;api('snapshots').then(value=>{if(active)setData(value)},error=>{if(active)setError(error.message)});return()=>{active=false}},[recycled])
+          React.useEffect(()=>{if(!recycled)return;const timer=setInterval(()=>setClock(Date.now()),60000);return()=>clearInterval(timer)},[recycled])
+          async function action(row,operation){setBusy(true);setError('');try{
+            const body=operation==='rollback'?{expectedRevisionId:row.currentRevisionId}:{}
+            await api('snapshots/'+encodeURIComponent(row.revisionId)+'/'+operation,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+            setConfirming(null);await reload()
+          }catch(error){setError(error.message)}finally{setBusy(false)}}
+          async function open(row){setBusy(true);setError('');try{setEntry(await api('snapshots/'+encodeURIComponent(row.revisionId)))}catch(error){setError(error.message)}finally{setBusy(false)}}
+          const matches=row=>(row.name+' '+(row.description||'')).toLowerCase().includes(query.toLowerCase())
+          const typeLabel=row=>row.kind==='workflow'?t('workflow'):t('skillx')
+          const groupKey=row=>row.kind+':'+row.name
+          const groups=new Map()
+          for(const row of data?.snapshots||[]) {
+            const key=groupKey(row),group=groups.get(key)
+            if(!group)groups.set(key,{...row,key})
+            else if(row.current||(!group.current&&(row.version>group.version||(row.version===group.version&&row.createdAt>group.createdAt))))groups.set(key,{...row,key})
+          }
+          const group=groups.get(selected)
+          const rows=recycled?(data?.trash||[]).filter(matches):(data?.snapshots||[]).filter(row=>groupKey(row)===selected)
+          const summaries=[...groups.values()].filter(matches)
+          const metadataRow={display:'flex',alignItems:'center',flexWrap:'wrap',gap:'8px 24px',marginTop:12}
+          const metadataText={...note,whiteSpace:'nowrap'}
+          return h('section',{className:'sxw-page',style:{...box,width:'100%',maxWidth:1248,margin:'0 auto',overflow:'auto'}},
+            error&&h('p',{role:'alert'},error),
+            entry?h(EntryDetail,{key:entry.revisionId,entry,onBack:()=>{setEntry(null);void reload()}}):h(React.Fragment,null,
+              h('p',{style:note},t(recycled?'trashIntro':'snapshotIntro')),
+              recycled&&h('p',{style:note},t('dependencyRetention')),
+              !recycled&&selected?h('header',{style:{marginBottom:20}},
+                h(Button,{variant:'ghost',size:'sm',onClick:()=>{setSelected(null);setConfirming(null)}},'← '+t('back')),
+                group&&h('div',null,h('div',{style:{display:'flex',alignItems:'center',gap:12,marginTop:12}},h('h2',{style:{fontSize:20,margin:0,overflowWrap:'anywhere'}},group.name),h('span',{style:note},typeLabel(group))),h('p',{style:note},displayDescription(group.description))),
+                h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:reload},t('refresh'))):
+              h('div',{style:{display:'flex',gap:12,marginBottom:20}},h('input',{type:'search',value:query,placeholder:t('search'),'aria-label':t('search'),style:{...control,flex:1,minWidth:0},onChange:event=>setQuery(event.target.value)}),h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:reload},t('refresh'))),
+              !data&&!error&&h('p',null,t('loading')),
+              !recycled&&!selected?h(React.Fragment,null,
+                data&&!summaries.length&&h('p',{style:note},t('empty')),
+                summaries.map(summary=>h('article',{key:summary.key,style:{...card,marginBottom:12}},
+                  h('div',{style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
+                    h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>setSelected(summary.key),style:{paddingLeft:0,height:'auto',whiteSpace:'normal',textAlign:'left',overflowWrap:'anywhere'}},summary.name),
+                    h('span',{style:note},typeLabel(summary)),
+                    h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>setSelected(summary.key),style:{marginLeft:'auto'}},t('snapshotVersions'))),
+                  h('p',{style:{...note,marginBottom:0}},displayDescription(summary.description))))):h(React.Fragment,null,
+                data&&!rows.length&&h('p',{style:note},t('empty')),
+                rows.map(row=>h('article',{key:row.revisionId,style:{...card,marginBottom:12}},
+                  h('div',{style:{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}},recycled&&h('strong',null,row.name),h('strong',null,'v'+row.version),h('code',{style:note,title:row.revisionId},row.revisionId.slice(0,8)),recycled&&h('span',{style:note},typeLabel(row)),row.current&&h('span',{style:note},t('currentVersion'))),
+                  h('p',{style:note},displayDescription(row.description)),
+                  h('div',{style:metadataRow},
+                    h('span',{style:metadataText},t('createdAt')+': '+new Date(row.createdAt).toLocaleString()),
+                    recycled?h(React.Fragment,null,
+                      h('span',{style:metadataText},t('deletedAt')+': '+new Date(row.deletedAt).toLocaleString()),
+                      h('span',{style:metadataText},t('deletionCountdown')+' '+Math.max(0,Math.ceil((row.purgeAfter-clock)/86400000))+t('days')),
+                      h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>action(row,'restore')},t('restoreSnapshot'))):h(React.Fragment,null,
+                      h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>open(row)},t('snapshotOpen')),
+                      row.version<row.currentVersion&&h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>setConfirming(row.revisionId)},t('rollback')))),
+                  recycled&&row.retainedBy?.length>0&&h('p',{style:note},t('dependencyRetention')+' '+row.retainedBy.join(', ')),
+                  confirming===row.revisionId&&h('div',null,h('p',null,t('rollbackWarning')),h(Button,{disabled:busy,onClick:()=>action(row,'rollback')},t('confirmRollback')),h(Button,{variant:'ghost',size:'sm',disabled:busy,onClick:()=>setConfirming(null)},t('dismiss')))))),
+              recycled&&data?.purged?.length>0&&h('details',null,h('summary',null,t('purgedRecords')),data.purged.filter(matches).map(row=>h('p',{key:row.revisionId,style:note},row.name+' v'+row.version+' · '+t('purgedAt')+': '+new Date(row.purgedAt).toLocaleString())))))
+        }
         function Workspace({ initialTab = 'home' }) {
           const [tab, setTab] = React.useState(initialTab)
+          const [pageVisit, setPageVisit] = React.useState(0)
+          function selectTab(kind) {
+            setTab(kind)
+            if (['home', 'skillx', 'workflow'].includes(kind)) setPageVisit(value => value + 1)
+            if (kind === 'home') setEditing(false)
+          }
           const [editing, setEditing] = React.useState(false)
-          const tabs = ['home', 'skillx', 'workflow', 'monitoring', 'runHistory', 'extractionModel']
+          const [monitoringRanges, setMonitoringRanges] = React.useState({})
+          const [monitoringRevision, setMonitoringRevision] = React.useState(0)
+          const tabs = ['home', 'skillx', 'workflow', 'monitoring', 'runHistory', 'extractionModel', 'snapshots', 'recycleBin']
           function onKeyDown(event) {
             const index = tabs.indexOf(tab)
             const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
             if (next === null) return
-            event.preventDefault(); setTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next].focus()
+            event.preventDefault(); selectTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next].focus()
           }
           return h('section', { className: 'sxw-workspace', style: { ...box, padding: 0, display: 'flex', flexDirection: 'column' }, 'aria-label': t('skillx') },
             h('style', null, '.sxw-workspace{--sxw-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-control-border:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-divider:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent);--sxw-line:color-mix(in srgb,var(--dsw-alias-label-primary) 12%,transparent)}.sxw-detail{container-type:inline-size}.sxw-execute-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}@container(min-width:900px){.sxw-execute-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}.sxw-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px 24px}.sxw-workspace-header{width:100%;max-width:1248px;margin:0 auto;padding:28px 24px 0;box-sizing:border-box;flex-shrink:0}.sxw-home-card:hover{background:var(--dsw-specific-sidebar-fill)!important}.sxw-home-card:focus-visible{outline:2px solid currentColor;outline-offset:3px}.sxw-tab:hover{background:var(--dsw-specific-sidebar-fill)!important}.sxw-tab:focus-visible{outline:2px solid currentColor;outline-offset:3px}@media(max-width:760px){.sxw-workspace-header{padding:20px 16px 0}.sxw-page>header{padding:16px 16px 0!important}.sxw-page>div{padding:16px!important}}'),
             h('header', { className: 'sxw-workspace-header' }, h('h1', { style: { fontSize: 22, lineHeight: '30px', fontWeight: 600, margin: '0 0 20px', letterSpacing: '-0.4px' } }, t('skillx')),
-              h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--sxw-divider)' } }, h('div', { role: 'tablist', 'aria-label': t('skillx'), onKeyDown, style: { display: 'flex', gap: 6, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap' } }, tabs.map(kind => h('button', { key: kind, className: 'sxw-tab', id: 'sxw-tab-' + kind, type: 'button', role: 'tab', 'aria-selected': tab === kind, 'aria-controls': 'sxw-panel-' + kind, tabIndex: tab === kind ? 0 : -1, onClick: () => setTab(kind), style: { font: 'inherit', fontSize: 14, fontWeight: tab === kind ? 600 : 400, borderRadius: 8, color: tab === kind ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', cursor: 'pointer', background: tab === kind ? 'var(--dsw-specific-sidebar-fill)' : 'transparent', border: '1px solid ' + (tab === kind ? 'var(--sxw-border)' : 'transparent'), padding: '9px 16px' } }, t(kind)))),
-                h(Button, { variant: 'ghost', size: 'sm', 'aria-pressed': editing, onClick: () => { setTab('home'); setEditing(!editing) }, style: { flexShrink: 0 } }, t(editing ? 'finishEditing' : 'editHome')))),
-            tabs.map(kind => h('div', { key: kind, id: 'sxw-panel-' + kind, role: 'tabpanel', 'aria-labelledby': 'sxw-tab-' + kind, hidden: tab !== kind, style: { flex: 1, minHeight: 0, minWidth: 0 } }, tab === kind && (kind === 'extractionModel' ? h(ExtractionModel) : kind === 'monitoring' ? h(Monitoring) : kind === 'runHistory' ? h(ExecutionHistory) : h(Page, { key: kind, kind, editing: kind === 'home' && editing })))))
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--sxw-divider)' } }, h('div', { role: 'tablist', 'aria-label': t('skillx'), onKeyDown, style: { display: 'flex', gap: 6, flex: 1, minWidth: 0, overflowX: 'auto', whiteSpace: 'nowrap' } }, tabs.map(kind => h('button', { key: kind, className: 'sxw-tab', id: 'sxw-tab-' + kind, type: 'button', role: 'tab', 'aria-selected': tab === kind, 'aria-controls': 'sxw-panel-' + kind, tabIndex: tab === kind ? 0 : -1, onClick: () => selectTab(kind), style: { font: 'inherit', fontSize: 14, fontWeight: tab === kind ? 600 : 400, borderRadius: 8, color: tab === kind ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', cursor: 'pointer', background: tab === kind ? 'var(--dsw-specific-sidebar-fill)' : 'transparent', border: '1px solid ' + (tab === kind ? 'var(--sxw-border)' : 'transparent'), padding: '9px 16px' } }, t(kind)))),
+                tab === 'monitoring' && h(Button, { variant: 'ghost', size: 'sm', onClick: () => setMonitoringRevision(value => value + 1), style: { flexShrink: 0 } }, t('refresh')),
+                tab === 'home' && h(Button, { variant: 'ghost', size: 'sm', 'aria-pressed': editing, onClick: () => setEditing(!editing), style: { flexShrink: 0 } }, t(editing ? 'finishEditing' : 'editHome')))),
+            tabs.map(kind => h('div', { key: kind, id: 'sxw-panel-' + kind, role: 'tabpanel', 'aria-labelledby': 'sxw-tab-' + kind, hidden: tab !== kind, style: { flex: 1, minHeight: 0, minWidth: 0 } }, tab === kind && (kind === 'snapshots' || kind === 'recycleBin' ? h(SnapshotPage, {recycled:kind==='recycleBin'}) : kind === 'extractionModel' ? h(ExtractionModel) : kind === 'monitoring' ? h(Monitoring, { ranges: monitoringRanges, setRanges: setMonitoringRanges, revision: monitoringRevision }) : kind === 'runHistory' ? h(ExecutionHistory) : h(Page, { key: kind + ':' + pageVisit, kind, editing: kind === 'home' && editing })))))
         }
         function Notice() {
           const state = React.useSyncExternalStore(subscribe, () => notice)
@@ -548,7 +661,7 @@ window.__ModuleLoader__.load({
               h('span', { style: { flex: 1, fontWeight: 500 } }, t(state.operation === 'prepare' ? state.kind === 'running' ? 'preparingContract' : state.kind === 'completed' ? 'contractPrepared' : 'contractFailed' : state.outcome === 'skipped' ? 'skipped' : state.kind)),
               h(Button, { variant: 'ghost', size: 'sm', title: t('dismiss'), 'aria-label': t('dismiss'), onClick: () => update(null), style: { width: 28, padding: 0, color: 'var(--dsw-alias-label-tertiary)' }, icon: h(IconCloseOutlineRegular, { size: 16 }) })),
             state.detail && h('p', { style: { margin: '10px 0 0', color: 'var(--dsw-alias-label-secondary)', overflowWrap: 'anywhere' } }, state.detail),
-            state.generatorSessionId && h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRightUpOutlineRegular, { size: 14 }), onClick: () => ctx.uiWorkspace.openSession(state.generatorSessionId) }, t('conversation')),
+            state.generatorSessionId && h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRightUpOutlineRegular, { size: 14 }), onClick: () => openRecordedSession({sessionId:state.generatorSessionId},message=>update({...state,detail:message})) }, t('conversation')),
             state.kind === 'running' && state.taskId && h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void api('cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: state.taskId }) }).catch(error => update({ ...state, detail: error.message })) } }, t('cancel')),
             state.resultUrl && h('div', { style: { marginTop: 12, paddingTop: 10, borderTop: '0.5px solid var(--dsw-alias-border-l1)', display: 'flex', justifyContent: 'flex-end' } },
               h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRightUpOutlineRegular, { size: 14 }), onClick: () => window.open(state.resultUrl, '_blank', 'noopener,noreferrer') }, t('result'))))

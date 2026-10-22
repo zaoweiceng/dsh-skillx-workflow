@@ -31,18 +31,20 @@ export function createNativeUiRuns(ctx, store, { dataRoot, execution }) {
       controller.signal.throwIfAborted();
       job.status = 'running'; job.startedAt = new Date().toISOString();
       await persist(job);
-      const result = await execution.runHost({ name: job.name, input: job.input, expectedRevisionId: job.revisionId },
+      const result = await execution.runHost({ name: job.name, input: job.input, expectedRevisionId: job.revisionId, ...(job.historical?{snapshotRevisionId:job.revisionId}:{}) },
         { id: job.id, cwd: job.cwd, signal: controller.signal, onSession: async sessionId => {
           job.relatedSessions = [...new Set([...(job.relatedSessions ?? []), sessionId])];
           await persist(job);
         } });
       if (!result || !['completed', 'blocked'].includes(result.status)) throw new Error('Execution returned no canonical capability result');
       job.status = result.status;
+      job.programStatus = result.status === 'completed' ? 'completed' : 'failed';
+      job.businessOutcome = result.receipt?.businessOutcome ?? {status:result.status==='completed' ? 'unknown' : 'blocked'};
       job.output = result.output;
       job.error = result.error;
       job.receipt = { runId: result.receipt?.runId, status: result.receipt?.status, capability: result.receipt?.capability,
-        outputDigest: result.receipt?.outputDigest, relatedSessions: result.receipt?.relatedSessions ?? [] };
-      job.relatedSessions = result.receipt?.relatedSessions ?? [];
+        outputDigest: result.receipt?.outputDigest, businessOutcome:job.businessOutcome, relatedSessions: result.receipt?.relatedSessions ?? [] };
+      job.relatedSessions = [...new Set([...(job.relatedSessions ?? []),...(result.receipt?.relatedSessions ?? [])])];
     } catch (error) {
       job.status = controller.signal.aborted ? 'cancelled' : 'failed';
       job.error = { message: error.message };
@@ -56,16 +58,17 @@ export function createNativeUiRuns(ctx, store, { dataRoot, execution }) {
       if (disposed) throw new Error('Plugin disposed');
       if (!uuid.test(request.idempotencyKey)) throw new Error('Execution idempotency key is required');
       if (request.cwd !== undefined && (typeof request.cwd !== 'string' || !isAbsolute(request.cwd) || request.cwd.includes('\0'))) throw new Error('Working directory must be an absolute path');
-      const fingerprint = createHash('sha256').update(JSON.stringify([request.name, request.revisionId, request.input, request.cwd])).digest('hex');
+      const fingerprint = createHash('sha256').update(JSON.stringify([request.name, request.revisionId, request.input, request.cwd, request.historical===true])).digest('hex');
       const previous = await get(request.idempotencyKey);
       if (previous) { if (previous.fingerprint !== fingerprint) throw new Error('Execution key was already used with different parameters'); return previous; }
-      const entry = await store.get(request.name);
+      const entry = request.historical===true?await store.snapshot(request.revisionId):await store.get(request.name);
+      if(entry && entry.name!==request.name)throw new Error("Snapshot name mismatch");
       if (!entry?.execution) throw new Error('This capability does not have an executable contract');
       if (entry.revisionId !== request.revisionId) throw new Error('Capability version changed; reopen it before executing');
       const errors = validateExecutionInput(entry.execution, request.input);
       if (errors.length) throw new Error('Invalid execution input: ' + errors.join('; '));
       if (active.size >= 4) throw new Error('Four UI executions are already active');
-      const job = { id: request.idempotencyKey, name: entry.name, revisionId: entry.revisionId, version: entry.version, input: request.input,
+      const job = { id: request.idempotencyKey, name: entry.name, revisionId: entry.revisionId, version: entry.version, historical:request.historical===true, input: request.input,
         cwd: request.cwd ?? process.cwd(), permissions: 'host', relatedSessions: [], fingerprint, status: 'queued', createdAt: new Date().toISOString() };
       const controller = new AbortController(), lifecycle = { controller, done: null };
       active.set(job.id, lifecycle);

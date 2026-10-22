@@ -13,15 +13,17 @@ async function fixture(t) { const dataRoot = await mkdtemp(join(tmpdir(), 'nativ
 
 test('publishes summaries and loads immutable full revisions on demand', async t => {
   const store = await fixture(t);
-  const one = await store.commit(input());
+  const compatibility = { platforms: ['darwin', 'linux'], requirements: ['DSH bash'], limitations: '原生 Windows 不支持；未在 Linux 实机验证。' };
+  const one = await store.commit(input({ compatibility }));
   assert.deepEqual(await store.list(), [{ name: one.name, description: one.description }]);
   assert.equal((await store.get(one.name)).content, one.content);
+  assert.deepEqual((await store.get(one.name)).compatibility, compatibility);
   const two = await store.commit(input({ operation: 'optimize', baseVersion: 1, content: 'Improved native instructions' }));
   assert.equal(two.version, 2);
   assert.equal(two.previousRevisionId, one.revisionId);
-  const original = JSON.parse(await readFile(join(store.dataRoot, 'revisions', `${one.revisionId}.json`)));
+  const original = JSON.parse(await readFile(join(store.dataRoot, 'revisions', one.revisionId, '.record.json')));
   assert.equal(original.content, one.content);
-  assert.equal(await readFile(join(store.dataRoot, 'revisions', `${one.revisionId}.md`), 'utf8'), one.content);
+  assert.equal(await readFile(join(store.dataRoot, 'revisions', one.revisionId, 'SKILL.md'), 'utf8'), one.content);
   assert.equal(original.sourceSessionId, 'source-1');
   await assert.rejects(store.commit(input({ operation: 'optimize', baseVersion: 1 })), /conflict/);
 });
@@ -170,4 +172,55 @@ test('home card order spans kinds, persists and survives optimization', async t 
   await assert.rejects(store.setHomeOrder(['missing']), /changed/);
   await store.setHomeOrder(['another']);
   assert.equal((await store.list('skill', { includeDisabled: true }))[0].homeOrder, 0);
+});
+
+test('contract-preserving repair publishes dependency and upstream locks atomically', async t => {
+  const store = await fixture(t);
+  const child = await store.commit(input({name:'atomic-operation',kind:'skill'}));
+  await store.commit(input({dependencies:[{name:child.name,version:1}]}));
+  let publications=0; const dispose=store.subscribe(()=>publications++);
+  const saved=await store.commitBatch([input({name:child.name,kind:'skill',operation:'optimize',baseVersion:1,baseRevisionId:child.revisionId,execution:{...execution,program:'return {accepted:false};'}})],{relockDependents:true});
+  dispose();
+  assert.equal(publications,1); assert.equal(saved.length,2);
+  const bundle=await store.loadBundle('native-example');
+  assert.equal(bundle.root.version,2); assert.equal(bundle.root.dependencies[0].version,2);
+  assert.equal(bundle.entries.find(entry=>entry.name===child.name).version,2);
+  await assert.rejects(store.commitBatch([input({name:child.name,kind:'skill',operation:'optimize',baseVersion:2,execution:{...execution,outputSchema:{type:'string'}}})],{relockDependents:true}),/cannot change schemas/);
+  assert.equal((await store.get('native-example')).version,2);
+});
+
+test('bundled resources survive source removal and store relocation, with private runtime path resolution', async t => {
+  const {writeFile,rename,chmod} = await import('node:fs/promises');
+  const {captureResources,normalizeResources} = await import('../src/native-resources.js');
+  const {createNativeExecutionService} = await import('../src/native-execution.js');
+  const store = await fixture(t);
+  const sourcePath=join(store.dataRoot,'original-helper.py');
+  const text='print("bundled helper; do not execute during extraction")\n';
+  await writeFile(sourcePath,text);
+  const resources=await captureResources({resourceSources:{'scripts/helper.py':sourcePath}},new Set([sourcePath]),new Map());
+  const entry=await store.commit(input({resources,execution:{...execution,program:'return {accepted: Boolean(await resources.path("scripts/helper.py"))};'}}));
+  await rm(sourcePath);
+  const relocated=store.dataRoot+'-relocated';
+  await rename(store.dataRoot,relocated);
+  t.after(()=>rm(relocated,{recursive:true,force:true}));
+  const moved=createStore({dataRoot:relocated});
+  const path=await moved.resolveResource(entry,'scripts/helper.py');
+  assert.equal(await readFile(path,'utf8'),text);
+  assert.ok(path.startsWith(relocated));
+  await assert.rejects(moved.resolveResource(entry,'scripts/../../outside.py'));
+  assert.throws(()=>normalizeResources({'scripts/CON.py':text}));
+  assert.throws(()=>normalizeResources({'scripts/a.py':text,'scripts/A.py':text}));
+  await assert.rejects(captureResources({resourceSources:{'scripts/helper.py':sourcePath}},new Set(),new Map()),/ask the user/);
+  let calls=0;
+  const runtime=createNativeExecutionService({ptcRuntime:{language:'typescript',isolation:'process',resolve:spec=>spec,run:async spec=>{
+    assert.match(spec.program,/const resources = Object.freeze/);
+    assert.equal(await spec.bindings[0].functions.resource({path:'scripts/helper.py'}),path);
+    calls++;return {value:{accepted:true}};
+  }},sandboxPolicy:{resolve:()=>({})}},moved,{dataRoot:relocated});
+  try {
+    const result=await runtime.run({name:entry.name,input:{}},{agent:{session:{header:{id:'session',cwd:relocated}}},token:{},rootCallId:'call',callId:'call',signal:new AbortController().signal});
+    assert.equal(result.ok,true,JSON.stringify(result.failure));assert.equal(calls,1);
+  } finally {await runtime.dispose();}
+  await chmod(path,0o600);await writeFile(path,'changed');
+  await assert.rejects(moved.resolveResource(entry,'scripts/helper.py'),/content changed/);
 });

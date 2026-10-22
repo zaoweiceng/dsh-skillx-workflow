@@ -101,11 +101,11 @@ test('native list filters in header, shows row switches, fetches details and cha
 });
 
 test('execution history opens the current learning phase at click time and surfaces navigation errors',async()=>{
- let loaded,cursor=0,current='planner'; const slots=new Map(),opened=[],requests=[],state=[];
+ let loaded,cursor=0,current='planner'; const slots=new Map(),opened=[],requests=[],state=[],catalog=new Set();
  const React={createElement:(type,props,...children)=>({type,props:props||{},children:children.flat()}),useState:initial=>{const index=cursor++;if(!(index in state))state[index]=initial;return[state[index],value=>{state[index]=value;}];},useEffect(){},useSyncExternalStore:()=>null};
  const primitives=Object.fromEntries(['MenuItemButton','Button','StateDot','IconCloseOutlineRegular','IconRightUpOutlineRegular'].map(n=>[n,n]));
  vm.runInNewContext(readFileSync(new URL('../client/index.js',import.meta.url),'utf8'),{window:{__ModuleLoader__:{load:v=>{loaded=v;}}},fetch:async url=>{requests.push(url);return{ok:true,text:async()=>JSON.stringify({status:'running',activeGeneratorSessionId:current,generatorSessionId:'future-builder'})};}});
- loaded.factory(n=>n==='react'?React:primitives).apply({effect:fn=>fn(),locale:{register(){},bind:()=>k=>k},uiWorkspace:{openSession:async id=>{if(current==='fail')throw new Error('navigation failed');opened.push(id);}},slots:{inject:(_n,fn)=>fn(),register:(s,c)=>slots.set(s.name+':'+(s.id||s.key),c)}});
+ loaded.factory(n=>n==='react'?React:primitives).apply({effect:fn=>fn(),locale:{register(){},bind:()=>k=>k},sessions:{refresh:async()=>{catalog.add(current);}},uiWorkspace:{openSession:async id=>{assert.ok(catalog.has(id),'refresh persisted session catalog before navigation');if(current==='fail')throw new Error('navigation failed');opened.push(id);}},slots:{inject:(_n,fn)=>fn(),register:(s,c)=>slots.set(s.name+':'+(s.id||s.key),c)}});
  const flatten=n=>n&&typeof n==='object'?[n,...(n.children||[]).flatMap(flatten)]:[];
  const Workspace=slots.get('main:skillx-workflow.skillx')().type;
  const workspace=Workspace({initialTab:'runHistory'});
@@ -118,4 +118,32 @@ test('execution history opens the current learning phase at click time and surfa
  await button.props.onClick();current='acceptance';await button.props.onClick();
  assert.deepEqual(opened,['planner','acceptance']);assert.equal(requests.length,2);
  current='fail';await button.props.onClick();assert.ok(flatten(render()).some(n=>n.props.role==='alert'&&n.children.includes('navigation failed')));
+});
+
+test('invalid extraction settings keep model selectors visible and can be repaired and saved', async () => {
+  let loaded, cursor = 0; const slots = new Map(), state = [], requests = [];
+  const React = { createElement:(type,props,...children) => ({type,props:props || {},children:children.flat()}),
+    useState:initial => {const index=cursor++; if (!(index in state)) state[index]=initial; return [state[index],value => {state[index]=value}];}, useEffect(){},useSyncExternalStore:() => null };
+  const primitives = Object.fromEntries(['MenuItemButton','Button','StateDot','IconCloseOutlineRegular','IconRightUpOutlineRegular'].map(n => [n,n]));
+  vm.runInNewContext(readFileSync(new URL('../client/index.js',import.meta.url),'utf8'), {window:{__ModuleLoader__:{load:v => {loaded=v}}},fetch:async (url,options) => {
+    requests.push({url,options}); return {ok:true,text:async () => JSON.stringify({selection:JSON.parse(options.body)})};
+  }});
+  loaded.factory(n => n === 'react' ? React : primitives).apply({effect:fn => fn(),locale:{register(){},bind:() => k => k},slots:{inject:(_n,fn) => fn(),register:(s,c) => slots.set(s.name+':'+(s.id||s.key),c)}});
+  const flatten = n => n && typeof n === 'object' ? [n,...(n.children||[]).flatMap(flatten)] : [];
+  const Workspace = slots.get('main:skillx-workflow.skillx')().type;
+  const Form = flatten(Workspace({initialTab:'extractionModel'})).find(n => n.type?.name === 'ExtractionModel').type;
+  state.length=0; state[0]={selection:null,selectionIssue:'unavailableSelection',models:[{provider:'traex',model:'gpt-5.5',name:'GPT',providerName:'Traex',efforts:[{id:'low',name:'Low'},{id:'high',name:'High'}]}]};
+  const render = () => {cursor=0;return flatten(Form())};
+  let nodes = render();
+  assert.ok(nodes.some(n => n.props.role === 'status' && n.children.includes('unavailableSelection')));
+  assert.equal(nodes.filter(n => n.type === 'select').length,2);
+  assert.equal(nodes.find(n => n.props.type === 'submit').props.disabled,true);
+  nodes.find(n => n.type === 'select' && n.props['aria-label'] === 'authoringModel').props.onChange({target:{value:JSON.stringify(['traex','gpt-5.5'])}});
+  nodes=render();
+  assert.equal(nodes.find(n => n.props['aria-label'] === 'authoringEffort').props.value,'low');
+  nodes.find(n => n.props['aria-label'] === 'authoringEffort').props.onChange({target:{value:'high'}});
+  nodes=render(); await nodes.find(n => n.type === 'form').props.onSubmit({preventDefault(){}});
+  assert.deepEqual(JSON.parse(requests[0].options.body),{provider:'traex',model:'gpt-5.5',reasoningEffort:'high'});
+  nodes=render(); assert.ok(nodes.some(n => n.props.role === 'status' && n.children.includes('extractionModelSaved')));
+  assert.equal(nodes.some(n => n.children.includes('unavailableSelection')),false);
 });

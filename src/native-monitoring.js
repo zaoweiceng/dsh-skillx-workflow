@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-const ended = new Set(['completed', 'failed', 'blocked']);
+const ended = new Set(['completed', 'failed', 'blocked', 'partial']);
 async function entries(path) {
   try { if ((await lstat(path)).isSymbolicLink()) throw new Error('Unsafe monitoring directory'); return await readdir(path, { withFileTypes: true }); }
   catch (error) { if (error.code === 'ENOENT') return []; throw error; }
@@ -52,10 +52,13 @@ export function createNativeMonitoring({ dataRoot, store, learningService, sessi
         const receipt = (await json(join(directory, 'resolved.json')))?.receipt ?? await json(join(directory, 'receipt.json'));
         const capability = { ...header.capability, ...receipt?.capability };
         let kind = capability.kind;
-        if (!kind && uuid.test(capability.revisionId)) kind = (await json(join(dataRoot, 'revisions', capability.revisionId + '.json')))?.kind;
+        if (!kind && uuid.test(capability.revisionId)) kind = ((await json(join(dataRoot,'revisions',capability.revisionId,'.record.json'))) ?? await json(join(dataRoot,'revisions',capability.revisionId+'.json')))?.kind;
         kind ??= catalog.get(capability.name);
         rows.push({ id: entry.name, type: 'execution', name: capability?.name ?? '—', kind, createdAt,
-          revisionId: capability.revisionId, sessionId: header.sessionId ?? receipt?.relatedSessions?.[0], executionContext: header.executionContext, status: receipt?.status ?? 'unfinished', tokens: tokensOf(receipt?.usage), usageComplete: receipt?.usageComplete === true, durationMs: receipt?.finishedAt ? Math.max(0, Date.parse(receipt.finishedAt) - time) : null });
+          revisionId: capability.revisionId, sessionId: header.sessionId ?? receipt?.relatedSessions?.[0], executionContext: header.executionContext,
+          programStatus:receipt?.status ?? 'unfinished',businessOutcome:receipt?.businessOutcome ?? {status:'unknown'},reason:receipt?.businessOutcome?.reason,
+          status:receipt?.status==='completed' ? receipt.businessOutcome?.status ?? 'unknown' : receipt?.status ?? 'unfinished',
+          tokens: tokensOf(receipt?.usage), usageComplete: receipt?.usageComplete === true, durationMs: receipt?.finishedAt ? Math.max(0, Date.parse(receipt.finishedAt) - time) : null });
       } catch { warnings.push(entry.name); }
     }
     for (const entry of await entries(join(dataRoot, 'jobs'))) {
@@ -89,8 +92,19 @@ export function createNativeMonitoring({ dataRoot, store, learningService, sessi
         try { items.push(redact(JSON.parse(line))); } catch { items.push({ type: 'incomplete_record' }); }
       }
     } finally { lines.close(); stream.destroy(); }
-    return { items, nextOffset: more ? offset + 50 : null };
+    const receipt = await json(join(directory,'receipt.json'));
+    const header = await json(join(directory,'header.json'));
+    const ownerId = header?.executionContext?.id;
+    const job = uuid.test(ownerId ?? '') ? await json(join(dataRoot,'ui-runs',ownerId + '.json')) : null;
+    const recovery = [];
+    for (const sessionId of new Set([...(receipt?.relatedSessions ?? []),...(job?.relatedSessions ?? [])])) {
+      if (!uuid.test(sessionId)) continue;
+      const record = await json(join(dataRoot,'recovery',sessionId + '.json'));
+      if (record) recovery.push({...record,diagnostic:await json(join(dataRoot,'recovery',sessionId + '-error.json'))});
+    }
+    return { items, nextOffset: more ? offset + 50 : null, receipt:redact(receipt), recovery:redact(recovery) };
   }
+  const revisionRecord=async id=>(await json(join(dataRoot,'revisions',id,'.record.json'))) ?? await json(join(dataRoot,'revisions',id+'.json'));
   // Follow the executed immutable revision back to its original extraction;
   // optimization evidence is not the unoptimized workflow baseline.
   async function estimateSavings(rows) {
@@ -104,12 +118,12 @@ export function createNativeMonitoring({ dataRoot, store, learningService, sessi
       if (!uuid.test(revisionId)) return null;
       if (baselines.has(revisionId)) return baselines.get(revisionId);
       const pending = (async () => {
-        let revision = await json(join(dataRoot, 'revisions', revisionId + '.json'));
+        let revision = await revisionRecord(revisionId);
         const visited = new Set([revisionId]);
         while (revision?.previousRevisionId) {
           if (!uuid.test(revision.previousRevisionId) || visited.has(revision.previousRevisionId)) return null;
           visited.add(revision.previousRevisionId);
-          revision = await json(join(dataRoot, 'revisions', revision.previousRevisionId + '.json'));
+          revision = await revisionRecord(revision.previousRevisionId);
         }
         if (revision?.operation !== 'extract') return null;
         const job = jobs.get(revision.generatorSessionId);
@@ -201,6 +215,7 @@ export function createNativeMonitoring({ dataRoot, store, learningService, sessi
       series.push({ start: new Date(start).toISOString(), value: valueOf(group), samples: group.length });
     }
     const result = { value: ['duration', 'reasons'].includes(key) ? null : valueOf(rows), series, tasks: rows.length, completed: completed.length, cancelled: rows.filter(row => row.status === 'cancelled').length,
+      undeclaredBusinessTasks:rows.filter(row=>row.type==='execution' && row.programStatus==='completed' && row.businessOutcome.status==='unknown').length,
       incompleteTasks: key === 'tokens' ? rows.filter(row => row.tokens === null || !row.usageComplete).length : 0, skippedRecords: warnings.length };
     if (key === 'savings') {
       const known = rows.filter(row => Number.isFinite(row.savedTokens));

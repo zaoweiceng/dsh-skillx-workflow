@@ -28,8 +28,11 @@ export async function writeEvidenceFile(path, evidence) {
       hash.update(line);
       const value = record.value;
       index.push({ record: index.length, offset: bytes, bytes: line.length, type: record.type,
+        // A transport-successful tool can report a business failure. Preserve
+        // its subsequent resolution chain even when later payloads are large.
+        ...(record.type === 'toolEvidence' ? { continuationReview: value.status === 'failed' || /\[exit code:\s*(?:-[1-9]\d*|[1-9]\d*)\]|"ok"\s*:\s*false|"status"\s*:\s*"(?:blocked|failed|partial)"/.test(typeof value.output === 'string' ? value.output : (value.output ?? []).filter?.(block=>block.type==='text').map(block=>block.text).join('\n') ?? '') } : {}),
         ...(value.sourceSeq !== undefined ? { sourceSeq: value.sourceSeq, sourceTime: value.sourceTime } : {}),
-        ...(value.role ? { role: value.role } : {}), ...(value.name ? { name: value.name } : {}),
+        ...(value.role ? { role: value.role } : {}), ...(record.type === 'control' ? { controlType: value.type } : {}), ...(value.name ? { name: value.name } : {}),
         ...(value.id ? { callId: value.id } : {}), ...(value.status ? { status: value.status } : {}),
         ...(value.turn !== undefined ? { turn: value.turn, step: value.step } : {}) });
       bytes += line.length;
@@ -75,4 +78,57 @@ export async function evidenceIndexPage(file, { cursor = 0, limit = 10, query, t
   }
   return { matches, nextCursor: next < file.recordCount ? next : null, totalRecords: file.recordCount,
     nextRead: next < file.recordCount ? { view: 'index', cursor: next, limit: 20, ...(query !== undefined ? { query } : {}), ...(type ? { type } : {}) } : null };
+}
+
+/** Terminal observations are mandatory evidence, irrespective of reported success.
+ * Tool transport status cannot establish whether a business command succeeded.
+ */
+export function outcomeRecordIds(file) {
+  const required = new Set();
+  let tool, assistant, incomplete, continuation = false;
+  const finish = () => {
+    for (const record of [tool, assistant, incomplete]) if (record !== undefined) required.add(record);
+    tool = assistant = incomplete = undefined;
+    continuation = false;
+  };
+  for (const entry of file.index) {
+    if (entry.type === 'toolEvidence') {
+      tool = entry.record;
+      continuation ||= entry.continuationReview === true;
+      if (continuation) required.add(entry.record);
+    }
+    if (entry.type === 'incompleteCall') incomplete = entry.record;
+    if (entry.type === 'message' && entry.role === 'assistant') assistant = entry.record;
+    if (entry.type === 'control' && entry.controlType === 'turn/end') {
+      finish(); required.add(entry.record);
+    }
+  }
+  finish();
+  return [...required].sort((a, b) => a - b);
+}
+
+/** Reserve context for outcomes across ALL sources before filling with earlier work.
+ * Oversized records remain indexed and must be read through lossless fragments.
+ */
+export async function prefillEvidence(files, references = [], { maxBytes = 32768, maxRecordBytes = 10000 } = {}) {
+  const queue = [];
+  for (const [sessionId, file] of files) {
+    const outcomes = new Set(outcomeRecordIds(file));
+    const cited = new Set(references.filter(ref => ref.sessionId === sessionId).map(ref => ref.record));
+    for (const entry of file.index) queue.push({ sessionId, file, entry,
+      priority: outcomes.has(entry.record) ? 0 : cited.has(entry.record) ? 1 : entry.type === 'message' && entry.role === 'user' ? 2 : 3 });
+  }
+  queue.sort((a, b) => a.priority - b.priority || a.entry.record - b.entry.record);
+  const records = new Map([...files.keys()].map(id => [id, []]));
+  let bytes = 0;
+  for (const { sessionId, file, entry } of queue) {
+    if (entry.bytes > maxRecordBytes || bytes + entry.bytes > maxBytes) continue;
+    const record = { record: entry.record, ...await readEvidenceRecord(file, entry.record) };
+    const size = Buffer.byteLength(JSON.stringify(record));
+    if (bytes + size > maxBytes) continue;
+    records.get(sessionId).push(record); bytes += size;
+  }
+  return { bytes, evidence: [...records].filter(([, records]) => records.length).map(([sessionId, records]) => ({
+    sessionId, sourceDigest: files.get(sessionId).digest, records: records.sort((a, b) => a.record - b.record),
+  })) };
 }

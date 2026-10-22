@@ -1,8 +1,8 @@
-import { acceptanceDigest } from './acceptance.js';
+import { draftDigest as hashDraft } from './generation-digest.js';
 
 /** Apply a small atomic JSON patch to an exact draft, never to a published artifact. */
 export function editDraft(draft, expectedDigest, edits) {
-  if (!draft || expectedDigest !== acceptanceDigest(draft)) throw Object.assign(new Error('Draft changed or is missing; read __draft__ and use its current draftDigest'), { code: 'DRAFT_CONFLICT' });
+  if (!draft || expectedDigest !== hashDraft(draft)) throw Object.assign(new Error('Draft changed or is missing; read __draft__ and use its current draftDigest'), { code: 'DRAFT_CONFLICT' });
   if (!Array.isArray(edits) || !edits.length || edits.length > 100 || Buffer.byteLength(JSON.stringify(edits)) > 64 * 1024) throw new Error('Supply 1..100 draftEdits, at most 64 KiB');
   const copy = structuredClone(draft);
   for (const edit of edits) {
@@ -35,6 +35,6 @@ export function editDraft(draft, expectedDigest, edits) {
 }
 
 export const draftEditParameters = {
-  draftDigest: { type: 'string', description: 'Exact draftDigest from the last receipt or read __draft__; required for edits/upserts' },
-  draftEdits: { type: 'array', items: { type: 'json' }, description: 'Atomic JSON patch array {op:add|replace|remove,path:JSON-pointer,value}. Patch saved unpublished draft only. Example: replace /contracts/0/cases/7/covers with ["empty","failure"]. No full rewrite needed.' },
+  draftDigest: { type: 'string', description: 'Exact draftDigest from the last receipt or read __draft__; required for edits' },
+  draftEdits: { type: 'array', items: { type: 'json' }, description: 'Atomic JSON patch array {op:add|replace|remove,path:JSON-pointer,value}. Patch saved unpublished draft only. Example: replace /candidates/0/validationNotes with "Observed evidence and limits". No full rewrite needed.' },
 };
