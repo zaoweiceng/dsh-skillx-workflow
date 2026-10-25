@@ -1,4 +1,4 @@
-# Git / 模拟 MR 复测（2026-10-25）
+# Git 交付复测（2026-10-25）
 
 沿用 [GitHub 已发布实验](https://github.com/zaoweiceng/dsh-skillx-workflow/blob/1f46be29aed7fe54090f8401396536760a0fbe31/docs/tests/2026-10-18/README.md) 的任务、Mock CLI 和原始 workflow（revision `6266b92e-6e6a-465b-bc71-a1bf4a21b4f2`）。GitHub 当前没有对应 PR，此处“MR”是实验生成的本地模拟交付物。
 

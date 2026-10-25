@@ -37,7 +37,7 @@
 
 源码定位支持工作区相对路径以及分号分隔的字面量变量赋值。函数接口包含原始调用位置、参数表达式及 CLI 公共环境覆盖项，避免只复制子脚本而遗漏父调用的执行条件。`esm-functions-v2` 的 `bindings` 是可选配置覆盖：未传值时保留原初始化表达式及其推导关系；只有函数本身的非默认参数必填。返回 void 的准备函数以 JSON `null` 完成，保留原副作用，不必重新编写目录准备等逻辑。已有资源不自动重编译，升级需重新提取。
 
-构建时补齐直接透传对象的子输入契约，检查可静态确定的返回字段、原 CLI 环境覆盖项，以及组合子能力后重放原始完整入口的情况。`BUILD_CONTRACT` 的 `OUTPUT_CONTRACT` / `SOURCE_INVOCATION_ENV` 指向缺失返回字段或调用环境；`SOURCE_ENTRY_REPLAY` 要求直接汇合子结果并独立完成归档。动态表达式仍需实跑，静态通过不等于行为通过。容器进程的缺失工作目录诊断包含 `PROCESS_CWD_UNAVAILABLE` 和实际 `cwd`，不会自动建目录；编排捕获脚本错误时保留简短原始诊断。实跑及所有失败成本见 [C39 独立提取验收](tests/2026-10-24-bounded-execution/C39-framework-contracts.md)。
+构建时补齐直接透传对象的子输入契约，检查可静态确定的返回字段、原 CLI 环境覆盖项，以及组合子能力后重放原始完整入口的情况。`BUILD_CONTRACT` 的 `OUTPUT_CONTRACT` / `SOURCE_INVOCATION_ENV` 指向缺失返回字段或调用环境；`SOURCE_ENTRY_REPLAY` 要求直接汇合子结果并独立完成归档。动态表达式仍需实跑，静态通过不等于行为通过。容器进程的缺失工作目录诊断包含 `PROCESS_CWD_UNAVAILABLE` 和实际 `cwd`，不会自动建目录；编排捕获脚本错误时保留简短原始诊断。实跑及所有失败成本见 [复杂工作流自主提取验收](tests/complex-workflow-acceptance/README.md)。
 
 构建同时检查 `.mjs` 资源的模块语法，并汇总没有本地绑定的 `require()` 错误，不能只检查编排入口。该检查不执行资源，不替代真实验收。资源 JSON 协议执行失败时，宿主在进程退出错误被转换前保留脚本错误码；调用方的 `originalFailure.diagnostic` 包含资源路径及至多 500 字符的简短诊断。可确认的缺包错误归外部依赖，路径类缺失保留未知，脚本程序错误归内部实现；不会因此自动重跑业务。
 
@@ -258,7 +258,7 @@ Retained observations are also available when a program deliberately omits bulk 
 要连同已安装 DSH 的真正 PTC 进程和 subprocess provider 一起验证，指定其 node_modules 目录：
 
 ```sh
-DSH_RUNTIME_MODULES=/path/to/dsh/node_modules node --test tests/process-regression.test.js
+DSH_RUNTIME_MODULES=/path/to/dsh/node_modules node --test tests/execution.test.js
 ```
 
 该命令使用安装目录中的官方 `dsh-ptc-runtime-node` 与 `dsh-subprocess-local`，通过公开运行接口执行，不启动模型、不修改 DSH 配置。Python 不叫 `python3` 时通过 `SKILLX_TEST_PYTHON` 指定。测试在临时目录运行并清理；包含中文、空格、字面 shell 元字符、真实超时/取消、stderr 截断、非 JSON 输出以及依赖预检阻断。真实平台覆盖以验收记录为准，不能据此推断所有操作系统已通过。
@@ -284,7 +284,7 @@ P0 方案见 [可执行提取设计](design/executable-extraction-v4.md)。提�
 
 ### 有证据的调用契约升级
 
-“依据执行记录修订”默认勾选“保持现有输入/输出接口”。当待修问题就是参数暴露过多或结果结构不适合调用时，显式取消该项允许作者升级真实 Schema 和实现，发布新版本；旧调用方需迁移。不要通过运行时恢复适配旧调用，也不要以增大预览阈值代替业务摘要。正常输出应一次包含决策所需的完整结果，失败输出也必须满足相同的 JSON/Schema 约束。示例及完整成本口径见 [调用契约实跑](tests/2026-10-23-invocation-cost/README.md)。
+“依据执行记录修订”默认勾选“保持现有输入/输出接口”。当待修问题就是参数暴露过多或结果结构不适合调用时，显式取消该项允许作者升级真实 Schema 和实现，发布新版本；旧调用方需迁移。不要通过运行时恢复适配旧调用，也不要以增大预览阈值代替业务摘要。正常输出应一次包含决策所需的完整结果，失败输出也必须满足相同的 JSON/Schema 约束。示例及完整成本口径见 [调用契约实跑](tests/invocation-cost-analysis/README.md)。
 
 框架不按 skill/workflow 类型强制制造依赖。一个工作流可以在同一程序内编排原生工具，SkillX 也可以复用一个必要的辅助能力；是否拆分由来源职责和独立复用价值决定。显式嵌套/并行场景要求和依赖一致性校验仍有效。
 

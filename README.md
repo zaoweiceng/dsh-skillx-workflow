@@ -40,7 +40,7 @@ SkillX 对普通 Skill 的改进：
 | 平均会话 Token | 244,280 | 139,644 | 减少 42.83% |
 | 平均模型调用 | 10.333 次 | 6.333 次 | 减少 38.71% |
 
-完整测试归档见 [docs/tests/2026-10-14](docs/tests/2026-10-14/README.md)。这组结果是小样本描述性对照，适合说明固定、多工具、可验证任务启用 skillx 后的收益来源。
+完整测试归档见 [DeepSeek 调用基线](docs/tests/git-delivery-baseline/deepseek.md)。这组结果是小样本描述性对照，适合说明固定、多工具、可验证任务启用 skillx 后的收益来源。
 
 ### GPT-5.5 medium
 
@@ -55,7 +55,9 @@ SkillX 对普通 Skill 的改进：
 
 六次调用的提交范围、正文和 MR 结果均正确。启用组完整应用指定 PATH 前缀；关闭组三次均遗漏该参数，在实验环境中仍能完成交付。工作流内部每次执行六个工具步骤，耗时 0.719～1.053 秒，模型 Token 为 0。
 
-GPT-5.5 medium 的单次从零提取样本耗时 127.348 秒、166,044 Token，自动完成验收与发布。逐轮数据、提取成本及实验条件见 [GPT-5.5 实验归档](docs/tests/2026-10-18/README.md)。Token 均包含报告的缓存读取；两批实验分别用于各自条件下的启用与关闭对照。
+GPT-5.5 medium 的单次从零提取样本耗时 127.348 秒、166,044 Token，自动完成验收与发布。逐轮数据、提取成本及实验条件见 [GPT-5.5 实验归档](docs/tests/git-delivery-baseline/gpt55.md)。Token 均包含报告的缓存读取；两批实验分别用于各自条件下的启用与关闭对照。
+
+最新的 [Git 交付复测](docs/tests/git-delivery-retest/README.md) 和 [复杂工作流验收](docs/tests/complex-workflow-acceptance/README.md) 单独记录；历史均值不能代替当前版本的验证。完整场景与限制见 [实跑验证索引](docs/tests/README.md)。
 
 ## 安装
 
@@ -85,13 +87,13 @@ cd dsh-skillx-workflow
 
 ## 开发与验证
 
-`npm test` 运行 `tests/` 下的插件测试。`npm pack --dry-run` 检查发布白名单。
+`npm test` 运行[七组核心回归](tests/README.md)；范围、环境与已知失败见该文档。`npm pack --dry-run` 检查发布白名单。
 
 - `src/`：Agent、执行、恢复、存储与证据处理。
 - `client/`：DSH 网页端插件入口。
-- `tests/`：宿主集成与单元验证。
+- `tests/`：提取、执行、存储、版本生命周期与 DAG 回归。
 - `scripts/`：安装、启动与运行检查。
-- `docs/`：SkillX 概念、契约、插件设计、运行机制和测试归档。
+- `docs/`：SkillX 概念、契约、插件设计、运行机制和实跑验证。
 
 配置 `enableCapabilities` 控制模型侧能力发现，管理和手动提取界面独立提供。测试使用现有模型的 endpoint、名称和凭据引用。
 

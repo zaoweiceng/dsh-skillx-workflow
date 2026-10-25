@@ -22,5 +22,5 @@
 
 ## 关联材料
 
-- [六轮测试结果](../../../tests/2026-10-14/README.md)
+- [六轮测试结果](../../../tests/git-delivery-baseline/deepseek.md)
 - [当前原生调用契约](../../contract.md)

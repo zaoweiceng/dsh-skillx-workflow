@@ -1,4 +1,4 @@
-# 2026-10-14 DeepSeek Flash High 调用对照
+# Git 交付基线：DeepSeek Flash High（2026-10-14）
 
 任务为隔离 Git 仓库中提交改动、创建并合并模拟 MR、回读核验。两组交替执行，各运行三轮，均使用 DeepSeek Flash High、maxTokens 256000 和相同权限。关闭组停用实验能力，保留插件与工具定义；开启组启用同一工作流 v2 和配套 SkillX。模型可见的普通 Skill 为一项，开启组另有两项实验能力。
 
@@ -11,4 +11,4 @@
 
 Token 包含报告的缓存读取，辅助标题生成用量未知。提取与优化成本独立于这组六轮调用指标。服务负载和缓存冷暖可能影响结果，这组小样本提供描述性对照。
 
-机器可读数据见 [comparison.json](comparison.json)，被测能力见[实测示例](../../skillx/example/tested-v2/README.md)。
+机器可读数据见 [deepseek-comparison.json](deepseek-comparison.json)，被测能力见[实测示例](../../skillx/example/tested-v2/README.md)。
