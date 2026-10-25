@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-25",
+  "scope": "One frozen published Git/mock-MR invocation pair; no re-extraction; framework unchanged during this experiment",
+  "historicalSource": "https://github.com/zaoweiceng/dsh-skillx-workflow/blob/1f46be29aed7fe54090f8401396536760a0fbe31/docs/tests/2026-10-18/README.md",
+  "model": {
+    "provider": "traex",
+    "name": "gpt-5.5",
+    "reasoningEffort": "medium"
+  },
+  "budget": {
+    "seconds": 83.54,
+    "tokens": 249861,
+    "enforcement": "Poll settled usage every second; indivisible model settlements may exceed cap; stop isolated arm server; in-flight unsettled usage unknown"
+  },
+  "historicalMean": {
+    "offSeconds": 74.378,
+    "onSeconds": 16.742,
+    "offTokens": 221273,
+    "onTokens": 68366.667
+  },
+  "trials": [
+    {
+      "arm": "off",
+      "completed": false,
+      "seconds": 73.431,
+      "secondsKind": "elapsed until budget stop",
+      "tokens": 256157,
+      "tokenKind": "settled lower bound; no final answer",
+      "usage": {
+        "inputTokens": 206028,
+        "cacheReadTokens": 46080,
+        "outputTokens": 4049,
+        "totalTokens": 256157
+      },
+      "modelSettlements": 9,
+      "tools": {
+        "skill": 1,
+        "todo_write": 8,
+        "bash": 5
+      },
+      "verification": {
+        "agentCompleted": false,
+        "branch": true,
+        "singleCommit": true,
+        "mainUnchanged": true,
+        "filesExact": true,
+        "onlyExcludedLogPending": true,
+        "logPreserved": true,
+        "localOriginOnly": true,
+        "pushedHead": true,
+        "mrOne": true,
+        "authCalled": true,
+        "mrNumber": true,
+        "mrURL": true,
+        "mrCommitMatches": true,
+        "mrSource": true,
+        "mrTarget": true,
+        "mrTitleLiteral": true,
+        "mrBodyLiteral": true,
+        "commitTitleLiteral": true,
+        "commitBodyLiteral": true,
+        "pathPrefixHonored": false,
+        "reportedSHA": false,
+        "reportedMRURL": false,
+        "reportedFiles": false,
+        "capabilitiesAbsent": true
+      }
+    },
+    {
+      "arm": "on",
+      "completed": true,
+      "seconds": 17.41,
+      "secondsKind": "completed",
+      "tokens": 70615,
+      "tokenKind": "complete settled usage",
+      "usage": {
+        "inputTokens": 69651,
+        "cacheReadTokens": 0,
+        "outputTokens": 964,
+        "totalTokens": 70615
+      },
+      "modelSettlements": 3,
+      "tools": {
+        "skill": 1,
+        "capability_run": 1
+      },
+      "verification": {
+        "agentCompleted": true,
+        "branch": true,
+        "singleCommit": true,
+        "mainUnchanged": true,
+        "filesExact": true,
+        "onlyExcludedLogPending": true,
+        "logPreserved": true,
+        "localOriginOnly": true,
+        "pushedHead": true,
+        "mrOne": true,
+        "authCalled": true,
+        "mrNumber": true,
+        "mrURL": true,
+        "mrCommitMatches": true,
+        "mrSource": true,
+        "mrTarget": true,
+        "mrTitleLiteral": true,
+        "mrBodyLiteral": true,
+        "commitTitleLiteral": true,
+        "commitBodyLiteral": true,
+        "pathPrefixHonored": true,
+        "reportedSHA": true,
+        "reportedMRURL": true,
+        "reportedFiles": true,
+        "workflowOutcome": true,
+        "workflowCollectionsExact": true,
+        "singleWorkflowCall": true
+      }
+    }
+  ],
+  "onNativeExecution": {
+    "seconds": 0.775,
+    "nativeBashSteps": 6,
+    "internalModelSettlements": 0
+  },
+  "publishedProgramUnchanged": true
+}

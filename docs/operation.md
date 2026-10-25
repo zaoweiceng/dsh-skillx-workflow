@@ -1,6 +1,6 @@
 # 运行机制
 
-本页说明 SkillX 在插件中怎样被提取、启用、执行和优化，以及为什么启用 skillx 能减少耗时和 Token。
+本页说明 SkillX 在插件中怎样被提取、启用、执行和优化。是否减少耗时和 Token，需要与同任务原始执行比较，不能由提取成功或 DAG 层数推断。
 
 ## 开发者使用路径
 
@@ -33,7 +33,15 @@
 
 证据保存在插件 `jobs/<任务 ID>.source-<序号>.jsonl`，每阶段提示词提供文件描述、摘要哈希，以及累计最多 32 KiB 的完整短记录，优先提供计划引用的记录；其余证据通过受限工具读取。Agent 通过受限的 `read_native_execution` 工具读取这些固定文件：先分页查看索引或按字面关键词搜索，再读取相关记录；大记录可按字符范围读取局部片段，完整详情则支持分片。预览和局部片段带有完整性标记。工具根据来源会话和记录编号读取冻结文件。
 
-单来源与多来源均按职责选择相关证据，保存来源摘要及完整读取的记录编号。规划引用实际记录，构建必须读取引用及末尾结果；依赖在规划和构建间锁定版本。发布检查结构及来源引用，不执行业务或验收模拟。JSONL 每个文件存储上限为 64 MiB，较大的证据按相关范围分页读取。
+`sourceFiles` 也保留 Bash 命令引用的工作区脚本，附 `commandReferences`；独立 `.mjs` 同时提供函数和常量接口。仅解析 Node/Python 调用路径及字面量标量变量，不执行 Shell，引用不等于命令成功证明。这样可定位在 Bash 内复制和配置的真实入口，避免与仅被阅读的辅助脚本混淆。单候选 `programEdits` 可同时提交顶层 `resourceSources`，复用同一源码捕获/函数适配机制，保留原资源，无需重发整个能力契约。
+
+源码定位支持工作区相对路径以及分号分隔的字面量变量赋值。函数接口包含原始调用位置、参数表达式及 CLI 公共环境覆盖项，避免只复制子脚本而遗漏父调用的执行条件。`esm-functions-v2` 的 `bindings` 是可选配置覆盖：未传值时保留原初始化表达式及其推导关系；只有函数本身的非默认参数必填。返回 void 的准备函数以 JSON `null` 完成，保留原副作用，不必重新编写目录准备等逻辑。已有资源不自动重编译，升级需重新提取。
+
+构建时补齐直接透传对象的子输入契约，检查可静态确定的返回字段、原 CLI 环境覆盖项，以及组合子能力后重放原始完整入口的情况。`BUILD_CONTRACT` 的 `OUTPUT_CONTRACT` / `SOURCE_INVOCATION_ENV` 指向缺失返回字段或调用环境；`SOURCE_ENTRY_REPLAY` 要求直接汇合子结果并独立完成归档。动态表达式仍需实跑，静态通过不等于行为通过。容器进程的缺失工作目录诊断包含 `PROCESS_CWD_UNAVAILABLE` 和实际 `cwd`，不会自动建目录；编排捕获脚本错误时保留简短原始诊断。实跑及所有失败成本见 [C39 独立提取验收](tests/2026-10-24-bounded-execution/C39-framework-contracts.md)。
+
+构建同时检查 `.mjs` 资源的模块语法，并汇总没有本地绑定的 `require()` 错误，不能只检查编排入口。该检查不执行资源，不替代真实验收。资源 JSON 协议执行失败时，宿主在进程退出错误被转换前保留脚本错误码；调用方的 `originalFailure.diagnostic` 包含资源路径及至多 500 字符的简短诊断。可确认的缺包错误归外部依赖，路径类缺失保留未知，脚本程序错误归内部实现；不会因此自动重跑业务。
+
+单来源与多来源均按职责选择相关证据，保存来源摘要及完整读取的记录编号。规划引用实际记录，构建必须读取引用及末尾结果；依赖在规划和构建间锁定版本。发布检查结构及来源引用，不执行业务或验收模拟。JSONL 不设固定文件字节上限；较大的证据按相关范围分页读取，磁盘或宿主实际故障仍会明确报错。
 
 提取按可复用职责拆分：单个 SkillX 负责一个具有明确输入输出的操作，变化的端口、路径和服务名作为参数；Workflow 组合这些能力和必要判断，并锁定依赖版本。例如端口定位进程、启动日志冲突诊断可作为独立职责，服务诊断则组合它们。能力粒度由独立复用价值决定。
 
@@ -64,6 +72,14 @@
 
 外层模型读取根能力的公开契约并调用 `capability_run`，执行程序负责解析依赖和消费中间工具结果。结果字段需要补充核验时，调用方将必要的只读检查合并为一次工具调用。这个分工是效率提升的主要来源。
 
+普通任务的原生工具定义会直接展示可执行根能力的用途、输入契约、兼容前提和输出 Schema；模型可以按任务选择并调用 `capability_run`，不要求用户指定能力名。已被其他能力引用的依赖保持渐进加载，不向调用者展开整条依赖链。当前根契约合计超过 16 KiB 时仍使用原有发现流程，避免每轮请求都携带一个庞大目录；此限制只控制工具呈现，不限制提取、发布和执行。历史快照使用独立的通用输入分支。执行仍通过既有版本、输入及权限检查。
+
+模型侧 Schema 省去 UI 的 title 和 examples；没有 description 时将 title 保留为说明。类型、必填、枚举、默认注释和业务约束描述均保留，存储 Schema 和 UI 不变。依赖探测命令不属于普通调用接口。调用方不需要读取实现。
+
+可用 `capability_run.select` 提供所需业务字段的 JSON Pointer 列表。完整结果先按原 Schema 校验并留存，返回的 output 是指针到值的映射，delivery.scope=selection。complete 只描述所选视图是否完整，missingPointers 明确列出原始结果中不存在的字段；业务成功与否仍由 receipt.businessOutcome 表达。后续 result_read 始终读取原始完整结果；也可在一次读取中使用 select 取得多个所需字段，不能与旧分页参数混用。未提供 select 时保持既有返回行为。
+
+这些机制减少重复发现和无关结果传输，不保证优于一个调用方已经知道完整用法的现成 CLI 命令。参数组织、结果大小和业务失败仍会影响总成本；失败样本不能从性能报告中删除。
+
 ## 执行程序怎样使用工具
 
 执行程序可以调用 DSH 工具，例如 shell、文件、浏览器或其他已注册工具。调用经过宿主：
@@ -77,11 +93,9 @@
 
 ## 恢复怎样工作
 
-恢复分为前台恢复和后台维护。
+普通对话中的 `capability_run` 执行已发布程序，不启动 Agent 代行业务或补写成功结果。业务恢复由 workflow 自身实现。输入错误返回精确 Schema 问题；并行依赖异常保留各自的能力身份，避免同码异常覆盖而修错节点。
 
-前台恢复发生在同一次 `capability_run` 内。它读取当前输入、程序、执行轨迹和失败信息，在当前权限和证据范围内补全一个经过 Schema 校验的结果。
-
-恢复任务完成后，独立子 Agent 分析是否为实现缺陷；有明确修复方案时才启动优化，偶发故障保持原版本。
+实现缺陷可通过 `capability_revise` 明确修订：只读作者读取本次证据、修改并发布能力，随后调用方重新调用。修订接口不执行业务，失败调用及修订开销均计入执行成本。工作台的手动诊断入口独立保留。
 
 ## 为什么启用 skillx 更快
 
@@ -99,19 +113,21 @@
 
 手动执行与 DSH 对话有独立生命周期。能力详情和执行记录列表的“查看原始记录”在弹窗内分页展示调用参数、结果与失败原因，并关联恢复诊断。所有对话入口先刷新持久化会话目录；跳转失败显示明确错误。人工执行触发的恢复及后台诊断使用“提取模型”中的显式模型配置，普通对话中的恢复沿用调用方模型。恢复结束状态与关联会话同步保存在原执行回执和事件中。
 
-提取仅有职责规划和构建两个阶段，优化仅构建。各阶段使用“提取模型”中保存的模型；不生成验收样本、模拟工具响应、故障注入或 ZIP/Base64 测试资料，不运行候选程序和业务操作。已有配置 `contractReview` 不再启用验收阶段。
+提取仅有职责规划和构建两个阶段，优化仅构建。各阶段使用“提取模型”中保存的模型；不运行候选程序和业务操作，不为提取额外执行业务验收。来源流程本身包含的验证和恢复逻辑仍应保留。已有配置 `contractReview` 不再启用验收阶段。
 
 宿主仅检查 JSON Schema、适用时的 JavaScript 语法、依赖版本与字面调用、证据引用、兼容性声明及错误指引路径。这些是保存格式检查，不能证明业务行为正确。成功完成的候选按批次原子发布；没有独立复用价值时可以跳过。
 
 生成前会提供 [DSH 支持的 JSON Schema 子集](skillx/contract.md#dsh-支持的-json-schema-子集)，提交工具和协议查询使用同一说明。提交时一次汇总所有候选的输入、输出 Schema 问题，避免逐轮发现已存在的限制。
 
-每个候选按职责说明独立消费结果、输入变量及必要依赖。稳定操作提取为 SkillX，流程通过固定版本依赖编排；不规定产物数量。来源必须包括用户目标、相关操作及最终结果，失败尝试不能替代最终成功机制。优先保留来源中的 CLI/库调用，不为提取重写协议、压缩或编码算法。
+每个候选按职责说明独立消费结果、输入变量及必要依赖。叶节点提取为 SkillX，有能力依赖的节点由宿主标为 workflow；流程通过固定版本依赖编排，不规定产物数量。来源必须包括用户目标、相关操作及最终结果，失败尝试不能替代最终成功机制。优先保留来源中的 CLI/库调用，不为提取重写协议、压缩或编码算法。
 
-提取策略 `bounded-results-v3` 将工具错误、明确的非零退出码及输出中的失败/阻塞信号作为“需要复核后续处理”的证据标记，不据此自动推断业务结果。该轮标记之后的工具观察必须完整读取，包括超过预填大小限制的结果；通过分片读取，不静默省略。规划必须提交 `completionTrace`：用户目标、业务完成条件、已观察的继续处理分支，以及问题/原因/解决办法/实际证据的经验条目。问题原因不明时注明未知。
+提取界面可填写复用目的；API 的可选 `intent` 字段将当前用户目的传入规划、构建及恢复任务，历史来源不替代当前请求。界面不再要求填写节点数量。
 
-分片进度按读取对象与内容摘要保存，重复请求第一页不重置进度。游标不匹配时返回精确的 `nextRead` 工具名和参数；后续生成请求也提供 `pendingReads`，先完成当前读取再切换记录或批次，避免把不同结果的游标混用。
+规划阶段读取用户目标、相关操作与最终结果，确定每个候选的公开输入、输出 Schema、职责和依赖。输入、输出 Schema 直接进入构建草稿，构建阶段可依据真实源实现修订，不再从职责摘要重新创建一份接口。构建读取规划引用的证据，不重复强制读取整段历史的所有终端结果。
 
-每条经验明确进入程序、前置条件、恢复文档或有依据地舍弃。构建以 `completionCoverage` 和 `lessonCoverage` 指向实际交付物片段；未落实已观察继续步骤或问题解决办法的候选会被拒绝。宿主检查证据已读和片段存在，不声称静态检查能证明业务语义正确。能力发布证据保留对应规划。
+提取各阶段使用原生 Agent 连续对话，不在每一步用宿主拼装数据替换历史，也不强制开启新的模型请求序列。原生工具调用、源代码读取、分页回执及草稿编辑均保留在连续上下文里。分片游标不匹配时仍返回精确的 `nextRead` 参数。
+
+不再要求 `completionCoverage`、`lessonCoverage` 引用当前能力自身的代码片段来证明完整流程，也不把 `Promise.all` 字面调用数量当作业务并行证明。委托依赖的工作由依赖承担；实际业务覆盖、参数传递、并行与恢复均以真实执行验收。依赖声明仍须与真实调用一致，Schema、语法、版本及引用格式检查不变。
 
 程序执行状态与业务结果分开保存、展示和统计。`receipt.status` 表示程序状态，`receipt.businessOutcome` 按能力显式声明的 `execution.outcome` 映射判定。部分完成和阻塞不计业务成功；未声明结果映射的历史版本标为未知，不猜测其任意输出字段含义。
 
@@ -121,7 +137,7 @@
 
 ### 保存与局部修复
 
-规划和实现草稿保存于 `jobs/<taskId>.<phase>-working-draft.json`，诊断保存于 `jobs/<taskId>.diagnostics.json`。`read_native_draft` 按候选和 JSON pointer 读取字段；同阶段重复读取返回引用。使用当前 `draftDigest` 加 `draftEdits` 或精确 `programEdits` 修复结构问题，摘要过期则拒绝。重复失败和总修复次数均有上限，停止时保留草稿。
+规划和实现草稿保存于 `jobs/<taskId>.<phase>-working-draft.json`，诊断保存于 `jobs/<taskId>.diagnostics.json`。`read_native_draft` 按候选和 JSON pointer 读取字段；同阶段重复读取返回引用。使用当前 `draftDigest` 加 `draftEdits` 或精确 `programEdits` 修复结构问题，摘要过期则拒绝。相同草稿重复出现相同诊断时停止并保留草稿；累计提交次数仅作估计，不强制中止有进展的修复。
 
 生成异常另存于仅本地可读的 `jobs/<taskId>.failure.json`，包含失败阶段、会话 ID 和原始异常。Agent 初始化失败时可能尚无可查看的提取对话，应查此文件；原始异常不返回前端。
 
@@ -129,7 +145,7 @@
 
 `repairTargets` / `savedDraft` 是展示投影，其中 `resourceManifest` 和 `path` 是只读派生字段，不是可编辑的候选字段。删除或替换前通过 `read_native_draft` 的候选名与 JSON pointer 确认真实字段；不要用空 `resources` 绕过插件异常。
 
-向提取接口提交 `resumeTaskId` 复用已保存规划和实现；宿主核对来源摘要及依赖锁。历史验收资料不再读取。`validateOnly:true` 仅执行静态提交检查并保存回执，不发布，不运行候选程序。
+向提取接口提交 `resumeTaskId` 复用已保存规划和实现；规划尚未通过时，也可以恢复摘要一致的未验证规划草稿，重新读取来源并通过全部校验。宿主核对来源摘要及依赖锁。历史验收资料不再读取。`validateOnly:true` 仅执行静态提交检查并保存回执，不发布，不运行候选程序。
 
 旧提取策略保存的规划不能绕过 `bounded-results-v3` 的证据与问题解决审查继续发布；此类提取需重新规划。已有优化草稿仍按当前规则校验后恢复。
 
@@ -157,12 +173,12 @@
 
 ```text
 units = max(1, ceil(records / recordsPerBudgetUnit), ceil(bytes / bytesPerBudgetUnit))
-budget = min(totalTimeoutMs, maxTimeoutMs, timeoutMs * units)
+estimatedTimeMs = min(totalTimeoutMs, maxTimeoutMs, timeoutMs * units)
 ```
 
 | 配置 | 默认值与作用 |
 |---|---|
-| `totalTimeoutMs` | 初始总时间估计 10 分钟，运行中自动调整 |
+| `totalTimeoutMs` | 初始总时间估计 10 分钟，不是截止时间 |
 | `timeoutMs` | 每证据单位 10 分钟，用于计算初始估计 |
 | `maxTimeoutMs` | 初始时间估计上限 15 分钟 |
 | `recordsPerBudgetUnit` / `bytesPerBudgetUnit` | 100 条 / 262,144 字节 |
@@ -171,6 +187,8 @@ budget = min(totalTimeoutMs, maxTimeoutMs, timeoutMs * units)
 | `maxOutputTokens` | 全程输出工作估计 64,000 |
 | `maxRequestOutputTokens` | 单次请求输出额度 12,000 Token，传给宿主模型配置，实际用量由宿主回报 |
 | `maxRepairAttempts` / `maxRepeatedFailures` | 修复上限按候选数量确定 / 同一问题停滞 2 次；达到阈值停止并保留草稿 |
+
+提取不按总字节数、耗时或 Token 强制终止。计划、程序、Schema、资源、草稿及证据取消原有固定字节门槛，职责/完成条件等说明文本也不再因字符数被拒绝；单次交付分页保留全部内容。旧预算配置继续接受并作为成本估计；任务记录 `estimatedFinishAt`，不设置 `deadlineAt`。单次模型输出限制由供应商/配置决定，触及 `max-tokens` 后自动继续，直至提交、用户取消或真实失败。超过一次响应容量的计划/程序可先用 `draftOnly:true` 保存未完成草稿，再通过 `draftDigest/draftEdits` 分多次组装；不带 `draftOnly` 的最终提交才进行全部校验并允许发布，未完成草稿不算提取成功；重复无效结构的停滞保护仍保留。能力执行的进程超时和权限规则不受此变更影响。
 
 提取模型配置见[提取与保存](#提取与保存)。每次请求前，宿主估算输入大小、预留工具 Schema 和单次输出额度，记录剩余额度与预计用量；预计用量超过当前估计时更新估计并继续提取。用户取消、宿主失败和真实模型错误仍正常终止。`GET /skillx-workflow/api/runtime` 可核对实际加载的预算策略。
 
@@ -203,7 +221,7 @@ SkillX 和工作流的列表、详情页均提供删除入口。存在其他现�
 
 多来源提取与优化以 `sessionIds` 的首个来源作为主来源，记录其原始模型元信息；后续来源可以是纯工具执行会话。各来源的机器执行结果用于证据核验，提取模型由 SkillX 面板配置，当前调用上下文提供权限。
 
-优化 API 的 `reviewFindings` 可提供最多八项、合计 8 KiB 的审查意见。模型将其作为诊断假设，对照证据核实。只读生成阶段提交非法 JSON 时，符合完整捕获等条件的提交允许原模型在当前生成任务内做一次格式修复；该修复的触发条件是宿主已完整捕获并确认提交 JSON 解析失败。
+优化 API 的 `reviewFindings` 可提供最多八项审查意见。模型将其作为诊断假设，对照证据核实。只读生成阶段提交非法 JSON 时，符合完整捕获等条件的提交允许原模型在当前生成任务内做一次格式修复；该修复的触发条件是宿主已完整捕获并确认提交 JSON 解析失败。
 
 后台修复须保持输入输出 Schema 原样，修复方案及证据传给独立优化 Agent。没有明确缺陷时复用原版本，不为偶发故障发布新版本。
 
@@ -231,4 +249,57 @@ Public parameter descriptions must state mandatory bounds, units, paired-field c
 
 Retained observations are also available when a program deliberately omits bulk detail from its final output: `delivery.observations` points to `capability_result_read({runId,stepId:"index"})`. Select a listed stepId to read that successful native observation. For a tool that returns JSON as a string, explicitly select `jsonTextPointer` (for example `/stdout/text`), then apply `pointer` to the decoded JSON. This reads retained data, does not call a tool again, and does not claim truncated native stdout was complete. Historical failures caused solely by OUTPUT_SIZE_LIMIT can read their already-validated saved implementation output through the same session-bound tool.
 
-Coverage validation reports every invalid completionCoverage/lessonCoverage field together. Ellipses and pseudocode are not exact implementation references; an existing correct implementation requires a reference correction, not a program rewrite. The host verifies textual evidence coverage, not semantic correctness.
+
+
+## 进程稳定性回归（0.2.2）
+
+`npm test` 覆盖原有条目、进程失败记录、失败观察读取、恢复证据过滤、严格进程调用、资源脚本和可选环境预检。专项用例启动真实 Node/Python 子进程；默认的 PTC 求值仍使用测试夹具。
+
+要连同已安装 DSH 的真正 PTC 进程和 subprocess provider 一起验证，指定其 node_modules 目录：
+
+```sh
+DSH_RUNTIME_MODULES=/path/to/dsh/node_modules node --test tests/process-regression.test.js
+```
+
+该命令使用安装目录中的官方 `dsh-ptc-runtime-node` 与 `dsh-subprocess-local`，通过公开运行接口执行，不启动模型、不修改 DSH 配置。Python 不叫 `python3` 时通过 `SKILLX_TEST_PYTHON` 指定。测试在临时目录运行并清理；包含中文、空格、字面 shell 元字符、真实超时/取消、stderr 截断、非 JSON 输出以及依赖预检阻断。真实平台覆盖以验收记录为准，不能据此推断所有操作系统已通过。
+
+### 提取协议与自动流程图
+
+提取协议 `draft-plan-v2`：新计划只需在 `responsibilities` 的 `capability` 条目声明依赖，宿主派生省略的 `dependsOn`。旧显式 `dependsOn` 继续接受且必须完全一致；来源、循环、实际调用和版本锁校验保持不变。规划也可用 `read_native_draft` 按字段读取，并以 `{draftDigest,useDraft:true}` 提交当前草稿；最终提交不绕过任何门禁。
+
+工作流图为只读 `executable-syntax-v1` 投影，从当前实现的语法树与锁定版本依赖自动生成；Agent 不编写图、节点清单或可视化阶段注释。支持直接等待的能力调用、固定数组 `Promise.all`/`allSettled`、无动态调用的条件分支及嵌套工作流。工具并发仍遵循宿主现有规则。无法证明顺序的动态表达式、未等待调用、循环、异常控制区间与外部脚本明确显示为未知，不从注释猜测流程，也不改变执行语义。图不是实际成功执行证明。
+
+提取提交支持将 `useDraft:true` 与 `draftEdits` 或 `programEdits` 同次提交：先在摘要匹配的当前草稿上应用修改，再执行全部验收。它不能与完整候选覆盖混用；`draftOnly:true` 仍只保存、不发布。
+
+动态控制区间的可解析能力调用会按锁定版本递归展开，虚线仅表示源程序中的潜在调用位置；不推断实际执行次数、串并行或成功汇合。循环、异常处理和辅助函数导致的未知控制顺序保持显式标注。图完全从实现生成，Agent 不填写图元数据。
+
+## 0.3 提取执行边界
+
+P0 方案见 [可执行提取设计](design/executable-extraction-v4.md)。提取面板可指定 Linux Docker 目标及本次用途所需的嵌套深度、并行分支数量；默认 local 不会自动识别所有来源命令。容器来源必须选择 Docker，不能仅在说明里记下容器路径。主调用提供 `executionTarget`，宿主绑定并传递给所有依赖，原子资源脚本在目标内执行；具体字段见 [契约](skillx/contract.md#03提取用途与-docker-执行目标)。
+
+工作流图只读生成，提取 Agent 无需维护 DAG 元数据。受管理进程/资源遵循程序 `await` / `Promise.all`；普通原生工具继续互斥。真实并行应查看资源执行区间或分派时间，而非排队时间。
+
+“依据执行记录修订”提交原始会话及失败事实，让作者 Agent 修订已有能力；宿主原子发布并更新父级版本锁。静态提交只证明结构合法，必须另外真实调用核验结果。不要把 `available`、合法 JSON 或进程零退出解释为完整业务成功。当前业务修复与验收不由宿主替作者生成。
+
+
+### 有证据的调用契约升级
+
+“依据执行记录修订”默认勾选“保持现有输入/输出接口”。当待修问题就是参数暴露过多或结果结构不适合调用时，显式取消该项允许作者升级真实 Schema 和实现，发布新版本；旧调用方需迁移。不要通过运行时恢复适配旧调用，也不要以增大预览阈值代替业务摘要。正常输出应一次包含决策所需的完整结果，失败输出也必须满足相同的 JSON/Schema 约束。示例及完整成本口径见 [调用契约实跑](tests/2026-10-23-invocation-cost/README.md)。
+
+框架不按 skill/workflow 类型强制制造依赖。一个工作流可以在同一程序内编排原生工具，SkillX 也可以复用一个必要的辅助能力；是否拆分由来源职责和独立复用价值决定。显式嵌套/并行场景要求和依赖一致性校验仍有效。
+
+现有脚本可通过 `resourceSources` 复制为自有资源，保存草稿时即完成复制，可直接对资源做局部编辑。`resources.run({path,args})` 以原始 argv 执行 CLI 脚本并返回原始进程结果；不提供 args 时保留 JSON main 协议。执行程序须检查退出状态并按原有结果契约映射返回，不能仅返回尚未生成的报告路径。
+
+大结果预览使用 `{ "$omitted": "/原始结果指针" }` 明确标注省略字段，不把对象改成业务 null，也不返回截断路径。标记的指针可直接用于同一 runId 的 `capability_result_read`；无需重新执行业务。
+
+局部修订按目标和相关失败选择证据，不强制完整重读当前会话的所有历史终端结果。作者仍需读取所选来源的相关证据与当前能力实现；初次提取的目标、结果及规划引用要求保留。这样避免每次修订都随历史编排结果增长而重放阅读成本，不放宽业务验收。
+
+提交修复不设累计次数上限，避免作者逐项纠错时被中断并重新生成。仅在相同草稿重复出现相同诊断、没有进展时保留草稿和诊断后停止。既有 maxRepairAttempts 配置只保留在预算元数据中，不再作为硬中止条件。
+
+局部修订复用已发布且当前 version/revision 均未变化的依赖锁，不强制重新完整读取未改动依赖。新增或已变化的依赖仍须读取当前契约；失败诊断包含具体依赖名与声明/当前版本，避免泛化错误导致盲目重试。
+
+普通 capability_run 的 timeoutMs 按已校验的请求值传给执行账本，不再暗中截为 120 秒；外层 deadline 与账本使用同一预算。接口现有最大值不变，工作台手动诊断流程不在本变更内。
+
+原生调用方修订失败能力时，`capability_revise` 传入失败 `runId`；宿主将本会话保留的真实能力边界输入、契约、输出提供给作者按需读取，不只转述外层错误。`capability_result_read` 的 `implementationId:"index"` 可区分下层执行失败与上层结果映射错误；查询不执行原流程。
+
+规划定义可复用职责，构建确定实际依赖位置。共享环境准备可提升到并行分叉前，分支消费其结果；宿主仍检查声明依赖与代码调用一致，不对任意有副作用的能力调用自动缓存或合并。已验证的目标内运行配置应由实现保留，不要求普通调用方重新搜索。

@@ -7,7 +7,7 @@ export async function writeDirectory(directory,entry,{record=true}={}) {
  const files={'SKILL.md':entry.content,...entry.resources,...entry.docs};
  if(entry.execution)files[entryName(entry)]=entry.execution.program;
  const manifest={format:'skillx-directory-v1',name:entry.name,kind:entry.kind,description:entry.description,version:entry.version,revisionId:entry.revisionId,enabled:entry.enabled,
-  ...(entry.execution?{entry:{file:entryName(entry),runtime:entry.execution.language==='python'?'python':'javascript',convention:entry.execution.language==='python'?'json-stdin':'async-function-body'},inputSchema:entry.execution.inputSchema,outputSchema:entry.execution.outputSchema}:{}),
+  ...(entry.execution?{entry:{file:entryName(entry),runtime:entry.execution.language==='python'?'python':'javascript',convention:entry.execution.language==='python'?'json-stdin':'async-function-body'},inputSchema:entry.execution.inputSchema,outputSchema:entry.execution.outputSchema,executionTarget:entry.execution.target ?? 'local'}:{}),
   dependencies:entry.dependencies??[],...(entry.dependencyRevisions?{dependencyRevisions:entry.dependencyRevisions}:{}),compatibility:entry.compatibility,files:resourceManifest(files)};
  files['manifest.json']=JSON.stringify(manifest,null,2)+'\n';
  if(record)files['.record.json']=JSON.stringify(entry,null,2);

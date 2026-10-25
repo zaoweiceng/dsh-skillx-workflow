@@ -33,13 +33,21 @@ async function fixture(t, behavior, options = {}) {
       let completion; let cancelled = false;
       const agent = { session: { id: settings.sessionId, snapshotEvents: () => events, surface: { nodes: [] }, deriveMessages: () => [], append() {} },
         followup(message) {
-          const prompt = JSON.parse(message.content[0].text);
+          const prompt = message.source?.kind === 'dsh-skillx-workflow-authoring-continuation' ? {continuation:message.content[0].text} : JSON.parse(message.content[0].text);
           if (prompt.phase === 'plan') {
             completion = (async () => {
               for (const item of prompt.sourceSessions) await readOutcomes(tools, item);
               const existing = await store.get(candidate.name);
               if (existing) await tools.get('read_native_capability').execute({ name: candidate.name }, {});
               let value = options.skipPlanReason ? { decision: 'skip', reason: options.skipPlanReason, candidates: [], reuseNames: [] } : { decision: 'extract', reason: '存在具体独立复用目标。', candidates: existing ? [] : [{ name: candidate.name, kind: candidate.kind, description: candidate.description, reuseValue: 'Reusable operation with variable inputs in future supported tasks.', scope: 'One observed operation with variable inputs and explicit limits.', dependsOn: [], responsibilities, completionTrace:{goal:'生成可验证结果',doneWhen:'返回 accepted 结果',continuations:[],lessons:[{problem:'已观察工具失败',cause:'未知',resolution:'来源没有证明该失败已被修复，不编造修复步骤',disposition:'omit',reason:'仅保留 fixture 已证明的输出边界',sourceRecords:[{sessionId:prompt.sourceSessions[0].sessionId,record:1}]}]}, sourceRecords: [{ sessionId: prompt.sourceSessions[0].sessionId, record: 0 }] }], reuseNames: existing ? [candidate.name] : [] };
+              if (options.planBehavior && await options.planBehavior({value,tools,events,prompt})) return;
+              if (options.stagePlan) {
+                const planner=tools.get('submit_native_plan');
+                const exec={signal:new AbortController().signal,concludeTurn(){throw new Error('Unfinished plan must not end the phase');}};
+                let draft=await planner.execute({...value,candidates:[],draftOnly:true},exec);
+                for(const item of value.candidates) draft=await planner.execute({useDraft:true,draftOnly:true,draftDigest:draft.draftDigest,draftEdits:[{op:'add',path:'/candidates/-',value:item}]},exec);
+                value={draftDigest:draft.draftDigest,useDraft:true};
+              }
               events.push({ type: 'tool/call', data: { callId: 'plan', name: 'submit_native_plan' } });
               await tools.get('submit_native_plan').execute(value, { signal: new AbortController().signal, concludeTurn() {} });
               events.push({ type: 'tool/result', data: { message: { toolCallId: 'plan', isError: false } } });
@@ -315,4 +323,124 @@ test('builder may withdraw the entire batch without forced publication',async t=
  });
  const task=await f.service.start({sessionId:'source'}); const result=await settled(f.service,task.taskId);
  assert.equal(result.status,'completed'); assert.equal(result.outcome,'skipped'); assert.deepEqual(await f.store.list(),[]);
+});
+
+test('useDraft with edits submits the edited base without bypassing digest or syntax gates',async t=>{
+ const f=await fixture(t,async env=>{
+  await env.tools.get('read_native_execution').execute({sessionId:'source',view:'records',cursor:0},{});
+  const submit=env.tools.get('submit_native_capabilities'),exec={signal:new AbortController().signal,concludeTurn(){}};
+  let draft=await submit.execute({candidates:[candidate],draftOnly:true},exec);
+  await assert.rejects(submit.execute({useDraft:true,draftDigest:'stale',draftEdits:[{op:'replace',path:'/candidates/0/execution/program',value:'return {};'}]},exec),/current saved/);
+  await assert.rejects(submit.execute({useDraft:true,draftDigest:draft.draftDigest,draftEdits:[{op:'replace',path:'/candidates/0/execution/program',value:'return {'}]},exec));
+  assert.deepEqual(await f.store.list(),[]);
+  draft=await env.tools.get('read_native_draft').execute({name:'__draft__'},{});
+  env.events.push({type:'tool/call',data:{callId:'edited-base',name:'submit_native_capabilities'}});
+  await submit.execute({useDraft:true,draftDigest:draft.draftDigest,programEdits:[{before:'return {',after:execution.program}]},exec);
+  env.events.push({type:'tool/result',data:{message:{toolCallId:'edited-base',isError:false}}});
+  end(env.events);
+ });
+ const task=await f.service.start({sessionId:'source'}),result=await settled(f.service,task.taskId);
+ assert.equal(result.status,'completed',result.error);
+ assert.equal((await f.store.get(candidate.name)).execution.program,execution.program);
+});
+
+
+test('time and token estimates never cancel valid long authoring and output-limit continuations',async t=>{
+  let turns=0;
+  const f=await fixture(t,async env=>{
+    await new Promise(resolve=>setTimeout(resolve,15));
+    assert.equal(env.cancelled,false);
+    env.events.push({type:'assistant/message',data:{usage:{inputTokens:1000000,outputTokens:20000,totalTokens:1020000}}});
+    if(++turns<=3) {end(env.events,'max-tokens');return;}
+    await submit(env);end(env.events);
+  },{timeoutMs:1,maxTimeoutMs:1,totalTimeoutMs:1,maxTotalTokens:1,maxOutputTokens:1});
+  const task=await f.service.start({sessionId:'source'});
+  const result=await settled(f.service,task.taskId);
+  assert.equal(result.status,'completed',result.error);
+  assert.equal(turns,4);assert.equal(result.authoringContinuations.length,3);
+  assert.equal(result.deadlineAt,undefined);assert.ok(result.estimatedFinishAt);
+  assert.equal(result.budget.enforced,false);
+});
+
+test('large programs, schemas, resources and saved drafts publish without byte ceilings',async t=>{
+  const large={...structuredClone(candidate),resources:{'assets/evidence.txt':'中'.repeat(400000)}};
+  large.execution.program='/*'+'x'.repeat(140000)+'*/\n'+execution.program;
+  large.execution.inputSchema.description='x'.repeat(70000);
+  const f=await fixture(t,async env=>{await submit(env,[large]);end(env.events);});
+  const task=await f.service.start({sessionId:'source'});
+  const result=await settled(f.service,task.taskId);
+  assert.equal(result.status,'completed',result.error);
+  const saved=await f.store.get(candidate.name);
+  assert.deepEqual(saved.resources,large.resources);
+  assert.equal(saved.execution.program,large.execution.program);
+});
+
+
+test('unfinished drafts can be assembled across submissions without validation failures or early publication',async t=>{
+  const f=await fixture(t,async env=>{
+    await env.tools.get('read_native_execution').execute({sessionId:'source',view:'records',cursor:0},{});
+    const submitter=env.tools.get('submit_native_capabilities');
+    const toolExec={signal:new AbortController().signal,concludeTurn(){}};
+    let receipt=await submitter.execute({draftOnly:true,candidates:[],reuseNames:[]},toolExec);
+    assert.equal(receipt.validated,false);assert.equal(receipt.published,false);
+    receipt=await submitter.execute({draftOnly:true,draftDigest:receipt.draftDigest,draftEdits:[{op:'add',path:'/candidates/-',value:{name:candidate.name}}]},toolExec);
+    assert.equal(receipt.draftSaved,true);assert.deepEqual(await f.store.list(),[]);
+    for(const [key,value] of Object.entries(candidate)){
+      if(key==='name')continue;
+      receipt=await submitter.execute({draftOnly:true,draftDigest:receipt.draftDigest,draftEdits:[{op:'add',path:'/candidates/0/'+key,value}]},toolExec);
+    }
+    env.events.push({type:'tool/call',data:{callId:'final',name:'submit_native_capabilities'}});
+    await submitter.execute({draftDigest:receipt.draftDigest,useDraft:true},toolExec);
+    env.events.push({type:'tool/result',data:{message:{toolCallId:'final',isError:false}}});end(env.events);
+  },{stagePlan:true});
+  const task=await f.service.start({sessionId:'source'});
+  const result=await settled(f.service,task.taskId);
+  assert.equal(result.status,'completed',result.error);assert.equal(result.validationFailures,undefined);
+  assert.deepEqual((await f.store.get(candidate.name)).execution,execution);
+});
+
+test('draftOnly never counts as an accepted submission or publishes an unfinished artifact',async t=>{
+  const f=await fixture(t,async env=>{
+    env.events.push({type:'tool/call',data:{callId:'draft',name:'submit_native_capabilities'}});
+    await env.tools.get('submit_native_capabilities').execute({draftOnly:true,candidates:[],reuseNames:[]},{signal:new AbortController().signal,concludeTurn(){throw new Error('Draft must not end the phase');}});
+    env.events.push({type:'tool/result',data:{message:{toolCallId:'draft',isError:false}}});end(env.events);
+  });
+  const task=await f.service.start({sessionId:'source'});
+  const result=await settled(f.service,task.taskId);
+  assert.equal(result.status,'failed');assert.deepEqual(await f.store.list(),[]);assert.ok(result.drafts.build);
+});
+
+test('failed plan resumes the exact saved draft, supports field reads and keeps publication gated',async t=>{
+  let planning=0,savedDigest;
+  const f=await fixture(t,async env=>{await submit(env);end(env.events);},{planBehavior:async({value,tools,events,prompt})=>{
+    planning++;
+    const planner=tools.get('submit_native_plan'),exec={signal:new AbortController().signal,concludeTurn(){}};
+    if(planning===1){
+      const broken=structuredClone(value);broken.candidates[0].description='';
+      const draft=await planner.execute({...broken,draftOnly:true},exec);savedDigest=draft.draftDigest;
+      await assert.rejects(planner.execute({draftDigest:savedDigest,useDraft:true},exec),/nonempty string/);
+      await assert.rejects(planner.execute({draftDigest:savedDigest,useDraft:true},exec),/nonempty string/);
+    }else{
+      assert.equal(prompt.planDraft.draftDigest,savedDigest);
+      const read=await tools.get('read_native_draft').execute({name:candidate.name,jsonPointer:'/description'},{});
+      assert.equal(read,'');
+      await assert.rejects(planner.execute({draftDigest:'stale',draftOnly:true,draftEdits:[{op:'replace',path:'/reason',value:'wrong'}]},exec),/DRAFT_CONFLICT/);
+      const fixed=await planner.execute({draftDigest:savedDigest,draftOnly:true,draftEdits:[{op:'replace',path:'/candidates/0/description',value:candidate.description}]},exec);
+      assert.deepEqual(await f.store.list(),[]);
+      events.push({type:'tool/call',data:{callId:'resumed-plan',name:'submit_native_plan'}});
+      await planner.execute({draftDigest:fixed.draftDigest,useDraft:true},exec);
+      events.push({type:'tool/result',data:{message:{toolCallId:'resumed-plan',isError:false}}});
+    }
+    end(events);return true;
+  }});
+  const first=await f.service.start({sessionId:'source'}),failed=await settled(f.service,first.taskId);
+  assert.equal(failed.status,'failed');assert.deepEqual(await f.store.list(),[]);assert.equal(failed.plan,undefined);
+  f.ctx.sessionQuery.readSession=async()=>({...structuredClone(source),events:[...structuredClone(source.events),{type:'user/message',data:{role:'user',content:[{type:'text',text:'changed source'}]}}]});
+  await assert.rejects(f.service.start({resumeTaskId:first.taskId}),/Source evidence changed/);
+  assert.equal(f.creations.length,1,'stale evidence must be rejected before a new Agent starts');
+  f.ctx.sessionQuery.readSession=async()=>structuredClone(source);
+  const resumed=await f.service.start({resumeTaskId:first.taskId}),result=await settled(f.service,resumed.taskId);
+  assert.equal(result.status,'completed',result.error);assert.equal(result.resumedFromTaskId,first.taskId);
+  assert.deepEqual((await f.store.get(candidate.name)).execution,execution);
+  assert.deepEqual(result.plan.candidates[0].sourceRecords,failed.plan?.candidates?.[0]?.sourceRecords ?? [{sessionId:'source',record:0},{sessionId:'source',record:1}]);
 });

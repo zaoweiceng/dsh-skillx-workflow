@@ -9,7 +9,7 @@ import { normalizeExecution, normalizeCompatibility, assertProgramResources } fr
 
 const validName = name => typeof name === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name);
 const required = (value, field) => { if (typeof value !== 'string' || !value.trim()) throw new Error(`${field} is required`); return value; };
-const DEFAULT_BUNDLE_LIMITS = { maxDepth: 8, maxEntries: 32, maxBytes: 131072, maxResourceBytes: 1048576 };
+const DEFAULT_BUNDLE_LIMITS = { maxDepth: 8, maxEntries: 32, maxBytes: Number.MAX_SAFE_INTEGER, maxResourceBytes: Number.MAX_SAFE_INTEGER };
 export const REVISION_RETENTION_MS = 30 * 86400000;
 const executionText = entry => entry.execution?.program ?? entry.executionContent ?? entry.content;
 const reference = entry => ({ name: entry.name, kind: entry.kind, version: entry.version, revisionId: entry.revisionId,
@@ -37,7 +37,7 @@ function normalizeCandidate(input) {
   const resources = normalizeResources(input.resources);
   if (execution?.language==='typescript') assertProgramResources(execution.program, resources);
   const executionContent = input.executionContent;
-  if (executionContent !== undefined && (typeof executionContent !== 'string' || !executionContent.trim() || Buffer.byteLength(executionContent) > 65536)) throw new Error('executionContent must be nonempty Markdown at most 64 KiB');
+  if (executionContent !== undefined && (typeof executionContent !== 'string' || !executionContent.trim())) throw new Error('executionContent must be nonempty Markdown');
   return { ...input, kind, dependencies, ...(resources ? { resources } : {}), ...(docs ? { docs } : {}), ...(compatibility === undefined ? {} : { compatibility }), ...(execution === undefined ? {} : { execution }), ...(executionContent === undefined ? {} : { executionContent }) };
 }
 async function collectBundle(name, read, { signal, ...limits } = {}) {
@@ -278,6 +278,9 @@ export function createStore({ dataRoot, now = Date.now }) {
         revisions.push({ ...revision, enabled: previous?.enabled ?? true });
         rows[name] = { name, description, kind, showOnHome: previous?.showOnHome === true, homeOrder: previous?.homeOrder ?? null, enabled: previous?.enabled ?? true, version: revision.version, revisionId: revision.revisionId };
     }
+    // In-batch locks are allocated by the same transaction as their revisions.
+    const batchVersions=new Map(revisions.map(entry=>[entry.name,entry.version]));
+    for(const revision of revisions)revision.dependencies=revision.dependencies.map(lock=>batchVersions.has(lock.name)?{...lock,version:batchVersions.get(lock.name)}:lock);
     // Validate the projected publication before creating any visible revision.
     await validateProjected(revisions, rows, signal);
     for(const revision of revisions)revision.dependencyRevisions=(revision.dependencies??[]).map(lock=>({name:lock.name,version:lock.version,revisionId:rows[lock.name].revisionId}));

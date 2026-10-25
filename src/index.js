@@ -1,3 +1,5 @@
+import { assertResultSelection } from './result-delivery.js';
+import { workflowGraph } from './workflow-graph.js';
 import { registerNativeProcess } from './native-process.js';
 import { join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
@@ -10,8 +12,6 @@ import { createExtractionModels } from './extraction-model.js';
 import { createNativeAgentService } from './native-agent.js';
 import { createNativeExecutionService } from './native-execution.js';
 import { createNativeRecoveryService } from './native-recovery.js';
-import { businessOutcome } from './native-contract.js';
-import { writeFile } from 'node:fs/promises';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 
 export const name = 'dsh-skillx-workflow';
@@ -31,11 +31,10 @@ export function resolveConfig(config = {}) {
   }
   if (typeof result.enableCapabilities !== 'boolean') throw new Error('enableCapabilities must be boolean');
   if (result.dataRoot !== undefined && (typeof result.dataRoot !== 'string' || !isAbsolute(result.dataRoot) || result.dataRoot.includes('\0'))) throw new Error('dataRoot must be an absolute local path');
-  if (!Number.isInteger(result.timeoutMs) || result.timeoutMs < 100 || result.timeoutMs > 14400000) throw new Error('Invalid timeoutMs');
+  if (!Number.isSafeInteger(result.timeoutMs) || result.timeoutMs < 100) throw new Error('Invalid timeoutMs');
   if (result.maxSteps !== undefined && (!Number.isSafeInteger(result.maxSteps) || result.maxSteps < 1)) throw new Error('Invalid maxSteps');
-  if (!Number.isSafeInteger(result.maxTimeoutMs) || result.maxTimeoutMs < 100 || result.maxTimeoutMs > 86400000) throw new Error('Invalid maxTimeoutMs');
+  if (!Number.isSafeInteger(result.maxTimeoutMs) || result.maxTimeoutMs < 100) throw new Error('Invalid maxTimeoutMs');
   for (const key of ['totalTimeoutMs','maxTotalTokens','maxOutputTokens','maxRequestOutputTokens','maxTotalSteps','maxRepairAttempts','maxRepeatedFailures']) if (!Number.isSafeInteger(result[key]) || result[key] < 1) throw new Error('Invalid generation limit: ' + key);
-  if (result.totalTimeoutMs > 900000) throw new Error('totalTimeoutMs must not exceed 15 minutes');
   for (const key of ['recordsPerBudgetUnit', 'bytesPerBudgetUnit']) if (!Number.isSafeInteger(result[key]) || result[key] < 1) throw new Error('Invalid adaptive budget scale');
   return result;
 }
@@ -65,24 +64,46 @@ export function apply(ctx, config) {
   ctx.effect(() => () => uiRuns.dispose());
   if (settings.enableCapabilities) {
     ctx.effect(()=>registerNativeProcess(ctx,settings));
-    ctx.effect(() => ctx.systemPrompt.section({name:'native-capability-invocation',order:850,text:'When capability_run is available and an advertised executable SkillX or workflow covers the user goal, use this invocation path: load the root skill contract, supply its inputs to capability_run, and consume the validated output and execution receipt. The executor resolves declared dependencies, checks prerequisites and handles bounded recovery. Load implementation or CLI documentation only to resolve a concrete external blocker reported by that call; root invocation needs only its public contract. For final fields missing from the returned output, combine necessary read-only checks into one tool call. Results use bounded previews with delivery.complete and delivery.read. Do not request full raw logs unless needed for the goal. Read missing evidence with capability_result_read using the existing runId and precise JSON pointers; never rerun completed queries to obtain detail. Report the verified result concisely. A blocked call preserves completed steps; resume only the unfinished operation identified by its receipt.'}));
+    ctx.effect(() => ctx.systemPrompt.section({name:'native-capability-invocation',order:850,text:'When capability_run is available and an advertised executable SkillX or workflow covers the user goal, use its public contract to call capability_run and consume the validated output and execution receipt. When the tool schema already declares the selected capability’s input contract, invoke directly with its expectedRevisionId. Otherwise discover and load the root contract with skill first. The executor resolves declared dependencies and checks prerequisites. Workflow recovery runs in the published program; implementation defects can be explicitly revised with capability_revise. Load implementation or CLI documentation only to resolve a concrete external blocker reported by that call; root invocation needs only its public contract. For final fields missing from the returned output, combine necessary read-only checks into one tool call. Results use bounded previews with delivery.complete and delivery.read. Do not request full raw logs unless needed for the goal. Read missing evidence with capability_result_read using the existing runId and precise JSON pointers; never rerun completed queries to obtain detail. Report the verified result concisely. A blocked call preserves completed steps; resume only the unfinished operation identified by its receipt.'}));
     ctx.effect(() => registerNativeSkills(ctx, store));
+    ctx.effect(() => ctx.tools.register(defineTool({
+      name:'capability_revise',
+      description:'Submit an observed implementation or contract defect to the read-only native author and wait for publication. Uses this conversation as evidence; does not execute business operations. Do not revise code merely to install a missing external prerequisite. After publication invoke the capability again to verify the result.',
+      parameters:{name:{type:'string',required:true,description:'Capability from the failed run; input-contract failures are routed to the actual argument-assembling caller'},runId:{type:'string',required:true,description:'Retained failed/partial execution runId; supplies original producer and consumer inputs, schemas and outputs'},findings:{type:'string',required:true,description:'Concrete failed result, missing output or incorrect parameter behavior observed in this conversation'},preserveContract:{type:'boolean',description:'Defaults true; false only when input/output schema itself needs repair'}},
+      output:{schema:{type:'json'},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},
+      isConcurrencySafe:()=>false,
+      execute:async(args,exec)=>{
+        await ctx.sessions.flush(exec.agent.session);
+        const reviewExecution=await execution.review(args.runId,exec);
+        const target = [reviewExecution.summary.root?.name,reviewExecution.summary.failure?.capability].includes(args.name) ? (reviewExecution.summary.failure?.repairTarget?.name ?? args.name) : args.name;
+        const task=await service.start({sessionId:exec.agent.session.header.id,name:target,operation:'optimize',preserveContract:args.preserveContract ?? true,reviewFindings:[args.findings],reviewExecution});
+        const cancel=()=>void service.cancel(task.taskId);
+        exec.signal.addEventListener('abort',cancel,{once:true});
+        try {
+          if(exec.signal.aborted)cancel();
+          const result=await service.wait(task.taskId);
+          const updated=await Promise.all((result.entries||[]).map(async entry=>{const current=await store.get(entry.name);return {...entry,revisionId:current?.revisionId};}));
+          return {taskId:task.taskId,name:target,requestedName:args.name,status:result.status,updated,reused:result.reused ?? [],businessExecuted:false,...(result.error?{error:result.error}:{})};
+        } finally {exec.signal.removeEventListener('abort',cancel);}
+      },
+    })));
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'capability_result_read',
       description: 'Read retained validated capability output from this conversation without re-executing operations. Use delivery.read.runId and only needed JSON pointers; returns bounded JSON text fragments with nextOffset. A preview is not the complete output. Never rerun capability_run to obtain omitted detail.',
-      parameters: { runId: {type:'string',required:true,description:'Execution runId from delivery.read'}, stepId:{type:'string',description:'Optional retained native observation stepId, or index to list observations; no re-execution'}, jsonTextPointer:{type:'string',description:'Optional JSON Pointer to a JSON-encoded string inside the selected observation, e.g. /stdout/text. Explicitly decode it before applying pointer; only with stepId.'}, pointer:{type:'string',description:'JSON pointer, e.g. /key_logs or /hits/0; default root'}, offset:{type:'integer',description:'UTF-16 character cursor in the JSON text, default 0; follow nextOffset'}, limit:{type:'integer',description:'1 to 4000 UTF-16 characters, default 4000'} },
+      parameters: { runId: {type:'string',required:true,description:'Execution runId from delivery.read'}, select:{type:'array',items:{type:'string'},description:'Read multiple required JSON Pointers from retained output in one call, as a pointer-to-value map. Use instead of pointer/offset/limit/stepId/jsonTextPointer; does not execute the capability.'}, implementationId:{type:'string',description:'Read an original capability boundary: index for outcomes, or the ID in an executionReview examples pointer; pointer then selects /input, /output or /execution. No execution.'},stepId:{type:'string',description:'Optional retained native observation stepId, or index to list observations; no re-execution'}, jsonTextPointer:{type:'string',description:'Optional JSON Pointer to a JSON-encoded string inside the selected observation, e.g. /stdout/text. Explicitly decode it before applying pointer; only with stepId.'}, pointer:{type:'string',description:'JSON pointer, e.g. /key_logs or /hits/0; default root'}, offset:{type:'integer',description:'UTF-16 character cursor in the JSON text, default 0; follow nextOffset'}, limit:{type:'integer',description:'1 to 4000 UTF-16 characters, default 4000'} },
       output: {schema:{type:'json'},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},
       isConcurrencySafe:()=>true,
       execute:async(args,exec)=>execution.readResult(args,exec),
     })));
     ctx.effect(() => ctx.tools.register(defineTool({
       name: 'capability_run',
-      description: 'Execute a native SkillX/workflow as a black box. Discover purpose and input/output schema with skill; supply input and consume the verified output. Internal execution and bounded repair happen within this same call. Do not repeat its internal operations. timeoutMs limits foreground execution and recovery (default 600000). Evidence-based background capability maintenance has an independent budget and may continue after timeout, without replaying business operations. External blockers are returned for caller action.',
-      parameters: { name: { type: 'string', required: true, description: 'Exact enabled capability name' }, input: { type: 'json', required: true, description: 'JSON object matching the capability input schema' }, expectedRevisionId: { type: 'string', description: 'Optional exact revision selected in the execution UI' }, snapshotRevisionId: { type:'string', description:'Run an available immutable historical snapshot and its locked dependencies' }, timeoutMs: { type: 'integer', description: 'Total hard time budget in milliseconds, including recovery; 1000 to 600000' } },
+      description: 'Execute a native SkillX/workflow as a black box. Select a capability by purpose and use its typed input contract here directly. If its input is only generic JSON, load its public contract with skill first. Consume the verified output. Runs the published implementation and returns its original failure evidence. It does not start a reasoning Agent to replace failed business operations. Use capability_revise explicitly for implementation defects. timeoutMs limits foreground execution (default 600000). External blockers are returned for caller action.',
+      parameters: { name: { type: 'string', required: true, description: 'Exact enabled capability name' }, input: { type: 'json', required: true, description: 'JSON object matching the capability input schema' }, select: { type:'array', items:{type:'string'}, description:'Optional exact JSON Pointers to the business fields needed for this task, e.g. /status and /summary. Select only needed fields to avoid bulk results and follow-up reads. Returns a pointer-to-value map; missing pointers are explicit. Full output remains retained and business status is always in receipt.businessOutcome.' }, expectedRevisionId: { type: 'string', description: 'Optional exact revision selected in the execution UI' }, snapshotRevisionId: { type:'string', description:'Run an available immutable historical snapshot and its locked dependencies' }, timeoutMs: { type: 'integer', description: 'Total foreground time budget in milliseconds; 1000 to 600000' } },
       output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       isConcurrencySafe: () => false,
-      execute: async ({ name, input, expectedRevisionId, snapshotRevisionId, timeoutMs = 600000 }, exec) => {
-        if (execution.isHostCall(exec)) return execution.runHostCall({ name, input, expectedRevisionId, snapshotRevisionId }, exec);
+      execute: async ({ name, input, select, expectedRevisionId, snapshotRevisionId, timeoutMs = 600000 }, exec) => {
+        assertResultSelection(select);
+        if (execution.isHostCall(exec)) return execution.runHostCall({ name, input, select, expectedRevisionId, snapshotRevisionId }, exec);
         if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw new Error('timeoutMs must be between 1000 and 600000');
         const deadline = Date.now() + timeoutMs;
         const controller = new AbortController();
@@ -90,8 +111,13 @@ export function apply(ctx, config) {
         const timer = setTimeout(() => controller.abort(), timeoutMs); timer.unref?.();
         const scopedExec = { ...exec, signal };
         try {
-          const result = await execution.run({ name, input, expectedRevisionId, snapshotRevisionId, timeoutMs: Math.min(120000, timeoutMs), deadline }, scopedExec);
-          if (result.ok && !signal.aborted && Date.now() < deadline) return { status: 'completed', ...execution.delivery(result.output,result.receipt), receipt: publicReceipt(result.receipt) };
+          const result = await execution.run({ name, input, expectedRevisionId, snapshotRevisionId, timeoutMs, deadline }, scopedExec);
+          if (result.ok && !signal.aborted && Date.now() < deadline) {
+            const delivery=execution.delivery(result.output,result.receipt,select);
+            if (['partial','failed','blocked'].includes(result.receipt.businessOutcome?.status)) delivery.executionReview={...(await execution.review(result.receipt.runId,exec)).summary,
+              read:{tool:'capability_result_read',runId:result.receipt.runId,implementationId:'index'}};
+            return {status:'completed',...delivery,receipt:publicReceipt(result.receipt)};
+          }
           if (result.failure?.code === 'PLATFORM_UNSUPPORTED') return { status: 'blocked',
             error: { category: 'compatibility', code: 'PLATFORM_UNSUPPORTED',
               message: `${result.failure.capability} does not support ${result.failure.platform}. ${result.failure.compatibility.limitations}` },
@@ -101,24 +127,7 @@ export function apply(ctx, config) {
             receipt: publicReceipt(result.receipt) };
           const entry = result.entry ?? await store.get(name);
           if (!entry?.execution) return { status: 'blocked', error: { category: 'configuration', code: 'CAPABILITY_NOT_EXECUTABLE', message: 'The capability needs a native Agent-generated executable contract.' }, receipt: publicReceipt(result.receipt) };
-          let trace;
-          if (result.traceRef || result.receipt?.runId) {
-            try { trace = await execution.readTrace(result.traceRef ?? result.receipt.runId, exec); }
-            catch { trace = { unavailable: true, receipt: result.receipt }; }
-          }
-          if (signal.aborted || Date.now() >= deadline) {
-            return { status: 'blocked', error: { category: 'deadline', code: 'CAPABILITY_DEADLINE', message: 'The foreground deadline was reached. Execution evidence was retained; do not blindly repeat mutations.' }, receipt: publicReceipt(result.receipt) };
-          }
-          const restored = await recovery.recover({ entry, input, failure: result.failure, receipt: result.receipt, trace, failureGuides: result.failureGuides, resourceEntries:result.resourceEntries, exec: scopedExec, deadline });
-          if (signal.aborted || Date.now() >= deadline) {
-            return { status: 'blocked', error: { category: 'deadline', code: result.failure?.code ?? 'CAPABILITY_DEADLINE', originalFailure: result.failure, recovery: {code:'CAPABILITY_DEADLINE'}, message: 'The foreground deadline was reached during recovery. Partial execution is retained.' }, receipt: publicReceipt(result.receipt) };
-          }
-          if (restored.outcome === 'completed' && !signal.aborted && Date.now() < deadline) {
-            const completed = { ...result.receipt, status: 'completed', businessOutcome:businessOutcome(entry.execution,restored.output), recovered: true, finishedAt: new Date().toISOString(), outputDigest: 'sha256:' + createHash('sha256').update(JSON.stringify(restored.output)).digest('hex') };
-            if (completed.runId && /^[a-f0-9-]{36}$/.test(completed.runId)) await writeFile(join(dataRoot, 'executions', completed.runId, 'resolved.json'), JSON.stringify({ receipt: completed, output: restored.output }), { mode: 0o600 });
-            return { status: 'completed', ...execution.delivery(restored.output,completed), receipt: publicReceipt(completed) };
-          }
-          return { status: 'blocked', error: { category: result.failure?.category ?? restored.category, code: result.failure?.code ?? restored.reason, originalFailure: result.failure, recovery: {category:restored.category,code:restored.reason}, message: restored.outcome === 'external_blocked' ? 'An external prerequisite requires caller attention; partial execution is retained.' : 'Execution failed; the original error and completed steps are retained. Recovery could not produce a verified output; inspect originalFailure before taking action.' }, receipt: publicReceipt(result.receipt) };
+          return { status:'blocked', error:{category:result.failure?.category ?? 'internal',code:result.failure?.code ?? 'EXECUTION_FAILED',originalFailure:result.failure,message:'The published implementation failed. Inspect the original failure; correct external inputs/prerequisites or use capability_revise for implementation defects.'},receipt:publicReceipt(result.receipt) };
         } finally { clearTimeout(timer); }
       },
     })));
@@ -147,7 +156,7 @@ export function apply(ctx, config) {
       if (req.method === 'GET' && route.startsWith('monitoring/metrics/')) return send(200, await monitoring.metric(route.slice('monitoring/metrics/'.length), url.searchParams));
       if (req.method === 'GET' && route === 'monitoring/sessions') return send(200, await monitoring.sessions(url.searchParams));
       if (req.method === 'GET' && route.startsWith('monitoring/records/')) return send(200, await monitoring.records(route.slice('monitoring/records/'.length), url.searchParams));
-      if (req.method === 'GET' && route === 'runtime') return send(200, { mode: 'native-agent', dataRoot, enableCapabilities: settings.enableCapabilities, generationPolicy: { revision:'completion-evidence-v2', validation:'static-only', behaviorTests:false, recovery:'internal-subagent-on-failure', resources:'versioned-utf8-bundle-v1', processExecution:'native-argv-no-shell-v1', storage:'current-directories-with-revision-snapshots-v1', layoutWarning:store.layoutWarning, missingConfiguration:'ask-user', budgetMode:'adaptive-estimate', totalTimeoutMs:settings.totalTimeoutMs, maxTotalTokens:settings.maxTotalTokens, maxOutputTokens:settings.maxOutputTokens, maxRequestOutputTokens:settings.maxRequestOutputTokens, maxSteps:settings.maxSteps, maxTotalSteps:settings.maxTotalSteps, maxRepairAttempts:settings.maxRepairAttempts, maxRepeatedFailures:settings.maxRepeatedFailures } });
+      if (req.method === 'GET' && route === 'runtime') return send(200, { mode: 'native-agent', dataRoot, enableCapabilities: settings.enableCapabilities, generationPolicy: { revision:'executable-extraction-v4', submissionProtocol:'draft-plan-v2', workflowGraph:'executable-syntax-v1', executionTarget:'local-or-linux-docker-v1', managedConcurrency:'program-await-promise-all', validation:'static-only', behaviorTests:false, recovery:'explicit-author-revision', resources:'versioned-utf8-bundle-v1',sourceAdapters:'esm-functions-v2', processExecution:'native-argv-no-shell-v2', environmentPreflight:'optional-readonly-probes-v1', storage:'current-directories-with-revision-snapshots-v1', layoutWarning:store.layoutWarning, missingConfiguration:'ask-user', budgetMode:'advisory', generationCostLimitsEnforced:false, totalTimeoutMs:settings.totalTimeoutMs, maxTotalTokens:settings.maxTotalTokens, maxOutputTokens:settings.maxOutputTokens, maxRequestOutputTokens:settings.maxRequestOutputTokens, maxSteps:settings.maxSteps, maxTotalSteps:settings.maxTotalSteps, maxRepairAttempts:settings.maxRepairAttempts, maxRepeatedFailures:settings.maxRepeatedFailures } });
       if (req.method === 'POST' && route === 'homepage/order') {
         const body = await readBody(); return send(200, await store.setHomeOrder(body.names));
       }
@@ -159,6 +168,11 @@ export function apply(ctx, config) {
       if(req.method==='POST'&&/^snapshots\/[^/]+\/(rollback|restore)$/.test(route)) {
         const [,revisionId,action]=route.split('/'),body=await readBody();
         return send(200,action==='rollback'?await store.rollback(decodeURIComponent(revisionId),body):await store.restore(decodeURIComponent(revisionId)));
+      }
+      if (req.method === 'GET' && route === 'graph') {
+        const name=url.searchParams.get('name'),revisionId=url.searchParams.get('revisionId');
+        const bundle=revisionId ? await store.loadSnapshotBundle(name,revisionId) : await store.loadBundle(name);
+        return bundle ? send(200,workflowGraph(bundle.entries,name)) : send(404,{error:'Workflow unavailable'});
       }
       if (req.method === 'GET' && route === 'catalog') {
         const [capabilities, workflows] = await Promise.all([store.list('skill', { includeDisabled: true }), store.list('workflow', { includeDisabled: true })]);
@@ -183,7 +197,7 @@ export function apply(ctx, config) {
       }
       if (req.method === 'POST' && ['extract', 'optimize'].includes(route)) {
         const body = await readBody();
-        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, operation: route, reviewFindings: body.reviewFindings, resumeTaskId:body.resumeTaskId, validateOnly:body.validateOnly, preserveContract:body.preserveContract });
+        const task = await service.start({ sessionId: body.sessionId, sessionIds: body.sessionIds, name: body.name, intent:body.intent, operation: route, reviewFindings: body.reviewFindings, resumeTaskId:body.resumeTaskId, validateOnly:body.validateOnly, preserveContract:body.preserveContract, requirements:body.requirements });
         return send(202, task);
       }
       if (req.method === 'GET' && route === 'status') {

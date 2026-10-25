@@ -3,7 +3,7 @@ import { draftDigest as hashDraft } from './generation-digest.js';
 /** Apply a small atomic JSON patch to an exact draft, never to a published artifact. */
 export function editDraft(draft, expectedDigest, edits) {
   if (!draft || expectedDigest !== hashDraft(draft)) throw Object.assign(new Error('Draft changed or is missing; read __draft__ and use its current draftDigest'), { code: 'DRAFT_CONFLICT' });
-  if (!Array.isArray(edits) || !edits.length || edits.length > 100 || Buffer.byteLength(JSON.stringify(edits)) > 64 * 1024) throw new Error('Supply 1..100 draftEdits, at most 64 KiB');
+  if (!Array.isArray(edits) || !edits.length || edits.length > 100) throw new Error('Supply 1..100 draftEdits');
   const copy = structuredClone(draft);
   for (const edit of edits) {
     if (!edit || !['add', 'replace', 'remove'].includes(edit.op) || typeof edit.path !== 'string' || (!edit.path.startsWith('/') || edit.path === '/') || (edit.op !== 'remove' && !Object.hasOwn(edit, 'value'))) throw new Error('Draft edit needs add/replace/remove, a non-root JSON pointer and value except for remove');

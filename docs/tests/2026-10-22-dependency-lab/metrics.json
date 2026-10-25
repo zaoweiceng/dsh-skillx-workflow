@@ -1,0 +1,194 @@
+{
+  "originalAuthoring": {
+    "sessionId": "session-59b7967d-eaaa-43bd-954c-a51a97119556",
+    "turns": {
+      "1": {
+        "usage": {
+          "inputTokens": 908729,
+          "cacheReadTokens": 192512,
+          "outputTokens": 23676,
+          "totalTokens": 1124917
+        },
+        "start": 1792661957406,
+        "end": 1792662964640,
+        "wallSeconds": 1007.234
+      },
+      "2": {
+        "usage": {
+          "inputTokens": 195545,
+          "cacheReadTokens": 23040,
+          "outputTokens": 1600,
+          "totalTokens": 220185
+        },
+        "start": 1792662964661,
+        "end": 1792662992004,
+        "wallSeconds": 27.343
+      },
+      "3": {
+        "usage": {
+          "inputTokens": 239756,
+          "cacheReadTokens": 15360,
+          "outputTokens": 11547,
+          "totalTokens": 266663
+        },
+        "start": 1792663052245,
+        "end": 1792663140740,
+        "wallSeconds": 88.495
+      },
+      "4": {
+        "usage": {
+          "inputTokens": 1410541,
+          "cacheReadTokens": 76800,
+          "outputTokens": 12707,
+          "totalTokens": 1500048
+        },
+        "start": 1792663140749,
+        "end": 1792663331673,
+        "wallSeconds": 190.924
+      }
+    },
+    "total": {
+      "inputTokens": 2754571,
+      "cacheReadTokens": 307712,
+      "outputTokens": 49530,
+      "totalTokens": 3111813
+    },
+    "activeTurnWallSeconds": 1313.996
+  },
+  "rawWarmAgent": {
+    "sessionId": "session-79c623e7-a8b9-4eae-a6d1-412cfb881236",
+    "turns": {
+      "1": {
+        "usage": {
+          "inputTokens": 81910,
+          "cacheReadTokens": 50176,
+          "outputTokens": 3743,
+          "totalTokens": 135829
+        },
+        "start": 1792663415699,
+        "end": 1792663486956,
+        "wallSeconds": 71.257
+      }
+    },
+    "total": {
+      "inputTokens": 81910,
+      "cacheReadTokens": 50176,
+      "outputTokens": 3743,
+      "totalTokens": 135829
+    },
+    "activeTurnWallSeconds": 71.257
+  },
+  "rawWarmMedianMs": 5283.379,
+  "extraction": [
+    {
+      "taskId": "743599d4-852c-46cd-b94d-dbfb60ed5317",
+      "status": "failed",
+      "phase": "plan",
+      "createdAt": "2026-10-22T10:02:56.549Z",
+      "startedAt": "2026-10-22T10:02:56.570Z",
+      "finishedAt": "2026-10-22T10:02:56.789Z",
+      "totalTokens": 0,
+      "outputTokens": 0,
+      "totalSteps": 1,
+      "error": "DSH Agent did not complete successfully (MISSING_CREDENTIAL); no candidates published.",
+      "plannerSessionId": "8055b33d-aef2-4707-b1ab-9533edcecc72"
+    },
+    {
+      "taskId": "c5d842e4-2607-4ce4-be71-49a6b3997b0f",
+      "status": "failed",
+      "phase": "plan",
+      "createdAt": "2026-10-22T10:04:12.999Z",
+      "startedAt": "2026-10-22T10:04:13.012Z",
+      "finishedAt": "2026-10-22T10:08:08.429Z",
+      "totalTokens": 857777,
+      "outputTokens": 21995,
+      "totalSteps": 16,
+      "error": "Native submission repair attempt limit reached; draft and diagnostics preserved.",
+      "plannerSessionId": "088bdd3c-809e-4740-8ff3-ba36e8f68f8e"
+    },
+    {
+      "taskId": "2b714038-ec00-44c1-8e71-f3a7e2c06e57",
+      "status": "failed",
+      "phase": "plan",
+      "createdAt": "2026-10-22T10:12:02.221Z",
+      "startedAt": "2026-10-22T10:12:02.237Z",
+      "finishedAt": "2026-10-22T10:15:33.043Z",
+      "totalTokens": 969482,
+      "outputTokens": 16652,
+      "totalSteps": 17,
+      "error": "DSH Agent completed without a successfully logged extraction plan",
+      "plannerSessionId": "4e33ad24-fd27-4df2-8d3c-f721a6b7ba2d"
+    }
+  ],
+  "independentChecks": [
+    {
+      "run": 1,
+      "dataset": "training",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    },
+    {
+      "run": 1,
+      "dataset": "holdout",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    },
+    {
+      "run": 2,
+      "dataset": "training",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    },
+    {
+      "run": 2,
+      "dataset": "holdout",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    },
+    {
+      "run": 3,
+      "dataset": "training",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    },
+    {
+      "run": 3,
+      "dataset": "holdout",
+      "rowCountMatches": true,
+      "activeCountMatches": true,
+      "summaryMatches": true,
+      "allBranchesSucceeded": true,
+      "parallelOverlap": true,
+      "joinAfterBranches": true
+    }
+  ],
+  "publishedCapabilities": 0,
+  "workflowWarmProcess": null,
+  "workflowWarmReason": "No successfully published capability after two autonomous extraction attempts; execution and comparative savings are unverified.",
+  "rawWarmWallMs": [
+    5283.379,
+    4631.36,
+    5503.983
+  ],
+  "protectedFileHashChecksPassed": true
+}

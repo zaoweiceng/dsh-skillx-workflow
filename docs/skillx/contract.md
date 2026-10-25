@@ -42,6 +42,10 @@
 
 调用方按 `inputSchema` 传入 JSON，使用经过 `outputSchema` 校验的结果；实现程序、依赖和历史证据由插件内部管理。
 
+框架将精简的根能力输入契约直接呈现在原生 `capability_run` 工具定义中，普通任务可以按用途自动选择，不需要用户给出能力名或先调用 `skill`。依赖独立调用及大型目录仍渐进加载。该呈现保留所有 Schema 约束，只去除 UI 标签和示例；实际输入仍由原始 Schema 校验。公开契约的 `invocation.arguments.expectedRevisionId` 绑定已读修订。
+
+`capability_run` 可带 `select:["/status","/summary","/report_path"]`，这些参数属于框架调用接口，不进入能力 input。完整结果仍验证和保存；返回 output 形如 `{"/status":"completed","/summary":{...}}`，不存在的字段列入 `delivery.missingPointers`，不会被编造成空值或引起业务重放。`delivery.scope="selection"` 表示 complete/digest/bytes 针对所选视图，fullBytes 表示完整结果字节数。原始结果由已有 runId 和 `capability_result_read` 读取；该工具也支持 select 批量读取多个字段，不能与 pointer/offset/limit/stepId/jsonTextPointer 混用。
+
 ## 私有能力条目
 
 插件私有存储中的条目包含：
@@ -76,8 +80,8 @@
 当前实现约束：
 
 - `language` 为 `typescript` 或 `python`。前者使用普通 JavaScript async function body，后者是完整 Python 程序，通过 stdin 读取 JSON `{input, context}`，stdout 输出一个符合输出 Schema 的 JSON，日志写 stderr。每项能力只保留一种实现。
-- `program` 最大 64 KiB；JavaScript 发布前仅做语法解析，Python 仅检查文本结构，不执行程序或模拟验收。
-- `inputSchema` 和 `outputSchema` 最大 64 KiB，最大深度 32，必须是有限无环 JSON。
+- `program` 不设固定字节上限；JavaScript 发布前仅做语法解析，Python 仅检查文本结构，不执行程序或模拟验收。
+- `inputSchema` 和 `outputSchema` 不设固定字节上限，最大深度 32，必须是有限无环 JSON。
 - 输入和输出 Schema 均使用下面的 DSH JSON Schema 子集，输入根必须显式为 `type: "object"`。
 - 程序返回值必须通过输出 Schema 校验，超出输出大小上限会失败。
 - 程序返回值还必须是无损 JSON：可选对象字段无值时省略，不能设为 `undefined`；数组不能含 `undefined`，数值不能是 `NaN` 或无穷。多目标结果应省略不适用的单目标字段，不能用未定义值占位。
@@ -201,3 +205,76 @@ const resources = Object.freeze({
 After full outputSchema validation and retention, capability_run returns output plus delivery:{complete,runId,bytes,digest,read}. Small output is complete; output exceeding 16 KiB is a bounded mechanical preview with complete=false, which does not promise to satisfy the business schema. Read required details with capability_result_read using JSON Pointer and nextOffset; do not repeat business operations. Business outcome uses the full result. New authors must produce bounded semantic summaries by default; mechanical previews are only a delivery fallback.
 
 Input property descriptions must accurately declare mandatory bounds, units, combinations, defaults and precedence, matching program validation. Default annotations do not fill inputs. Execution errors retain original code and stage; recovery status is separate.
+
+
+### 0.2.2：进程判定与运行环境预检
+
+旧条目无需迁移，`processes.run` 仍返回原始进程结果。非零退出、超时、取消、信号终止和 stdout 截断会在回执中记为失败，不再作为成功步骤供 `tools.reuse` 复用；读取原始观察仍可取得失败输出。读取旧恢复证据时也重新检查进程状态。只有 stderr 截断时保留诊断标记，不阻断有效结果。
+
+新增 `processes.checkedRun({...request, acceptedExitCodes: [0]})`；默认仅接受退出码 0，有明确 CLI 契约时可指定其他退出码。失败码为 `PROCESS_EXIT_FAILED`、`PROCESS_TIMEOUT`、`PROCESS_CANCELLED`、`PROCESS_SIGNALLED`、`PROCESS_OUTPUT_TRUNCATED`、`PROCESS_RESULT_UNKNOWN` 或 `PROCESS_ACCESS_DENIED`。Node 脚本资源在序列化前拒绝丢失信息的返回值；`SCRIPT_OUTPUT_NOT_JSON`、`SCRIPT_OUTPUT_INVALID`、`SCRIPT_PROGRAM_FAILED` 区分返回值、stdout 协议和脚本异常。PTC 内未捕获的宿主异常保留原始失败码；程序内可按 `error.message` 匹配稳定码。
+
+能力可以在原有 `compatibility` 中增加可选 `probes`：
+
+```json
+{
+  "platforms": ["darwin", "linux", "win32"],
+  "requirements": ["配置可用的 Node 解释器"],
+  "limitations": "仅声明已验证的平台；探针不代替实际业务验收。",
+  "probes": [
+    {"executable": "@node", "args": ["--version"], "stdoutIncludes": "v", "timeoutMs": 5000}
+  ]
+}
+```
+
+探针必须来自已验证的只读检查，例如 CLI 版本或必要库的 import。宿主在整个静态依赖链业务执行前运行探针；同一次调用中的相同探针去重，默认 5 秒，上限 30 秒，并受整个调用预算约束。探针仍受调用方沙箱与权限约束；“只读”是编写要求，不是对任意命令的额外隔离保证。预检失败标记 `stage: preflight`，说明缺失的可执行文件（`EXECUTABLE_REQUIRED`）、启动条件或输出不符（`ENVIRONMENT_OUTPUT_MISMATCH`），不启动自动修复 Agent，不自动安装依赖。`.cmd/.bat` 仍需显式启动配置（`CLI_LAUNCHER_REQUIRED`）。
+
+没有探针的旧条目不增加执行步骤。预检只是必要条件检查，不能保证服务始终可用、原生库跨平台通用或消除检查后的环境变化。安装锁、断点恢复、系统包管理和通用依赖编排不在本次范围。失败重试前必须确认副作用；超时或退出码失败不意味着什么都没发生。
+
+0.2.2 的 JavaScript 宿主明确提供 `require()` 与动态 `import()`，按执行 cwd 解析模块；由相同 PTC 沙箱约束 I/O。程序自行声明的 `require` 可正常遮蔽宿主入口。嵌套工作流默认不再受全程 100 次调用的数量门槛约束；实际执行截止时间、取消、依赖深度及权限校验仍保留，服务调用者可显式设置 `maxCalls`。
+
+### 0.3：提取用途与 Docker 执行目标
+
+提取请求的 `requirements` 可指定 `target: "local" | "docker"`、`workflowDepth` 与 `parallelBranches`。默认 local、0、0；容器来源需明确选择 Docker，当前不会自动识别任意 Shell/远程传输。数量仅表示本次用途约束，不是通用 SkillX 最小规模。工作流必须组合能力；原子 skill 不得隐藏能力依赖。提交校验真实程序调用与锁定依赖，图仍由宿主自动派生。
+
+Docker 条目保存 `execution.target: "docker"`，宿主为全部入口注入必填的 `input.executionTarget`：`container`，可选 `dockerExecutable`（宿主客户端）、`nodeExecutable` / `pythonExecutable`（容器内解释器）。根调用验证运行中 Linux 容器，子能力继承根目标。容器资源经 stdin 传送到临时目录后执行，不依赖宿主修订目录挂载。目标内 I/O 放在资源脚本，编排只用 JSON 与受管理 SDK；`resources.path` 和绕过目标的通用 `tools.call` 不适用于 Docker 条目。不支持 SSH 或 Windows 容器，也不宣称完整对抗性沙箱。
+
+受管理进程/资源遵循编排程序的 `await` 与 `Promise.all`，无需叶子重复声明并行元数据。独立操作才能并行；共享安装目录需要业务实现自己的安装锁。其他原生工具保留互斥边界。实跑记录 `dispatchedAt` 表示开始实际分派，排队开始时间不能充当业务并发证据。
+
+公开契约同时披露执行目标和验证范围。`available` 只表示当前可执行实现存在；提取提交的静态合法性不等于业务可用。失败后依据原始执行记录修订能力并原子更新父级版本锁，不用运行时恢复掩盖提取缺陷。旧的容器边界丢失产物应停用后重新提取。
+
+作者读取工具 `read_native_capability` 支持可选 `jsonPointer`（例如 `/resources/scripts~1helper.py`）和分页游标；必须返回真实字段，不能以“初始提示已提供”替代资源正文。`read_native_draft` 在同名候选尚未建立时允许读取选中修订，已有草稿优先。普通调用方仍只读取公开契约；这个接口只属于提取/修订作者。
+
+### 提取源文件与草稿
+
+提取工具的 `read_native_execution(view:"source",sourcePath,sessionId)` 只读取源会话明确访问过的文件；读取与后续 `resourceSources` 打包共用缓存内容，不额外计算源文件哈希。缺失文件不会被静默替换。最终提交在必要证据完整交付后才保存；已有草稿允许携带当前 `draftDigest` 整体修订，过期摘要仍会拒绝。
+
+`submit_native_capabilities.programEdits` 默认精确修改主程序；可选 `resourcePath` 指向已有资源脚本。两者都要求当前草稿摘要和唯一匹配的 `before`，执行完整提交校验；资源修订无需重交其余文件。
+
+大型批量记录使用相同的无损分页，不因批量字节数退化成摘要预览。每页交付量为 48 KB；只在全部分页交付后标记证据已读。
+
+
+提取规划可附初步 `inputSchema`、`outputSchema`；构建必须依据真实脚本确定完整公开契约。保留规划能力身份与职责；依赖边由构建后的真实调用决定，允许共享准备移到父工作流并将已准备结果传给分支，也允许补充有来源支持的小操作依赖。不得以固定依赖位置迫使分支重复安装环境。依赖调用与结果归属须在真实执行中验证；不以重复粘贴代码片段或并行节点数量代替业务验收。各阶段保留原生 Agent 对话连续性。
+
+### 原有 CLI 资源
+
+`resources.run({path:"scripts/task.mjs",args:["--output",input.outputPath]})` 使用原始 argv 执行已归档的脚本，支持 executable、env、stdin，返回与 `processes.run` 一致的进程结果。省略 args 时保留原有 JSON main 协议。不要将 CLI 脚本当作 main 模块加载；执行程序负责检查退出状态和映射业务输出。
+
+### 失败执行的原始边界
+
+`capability_revise` 必须携带当前会话的失败执行 `runId`。作者收到能力边界状态索引，通过 `read_native_draft(name:"__execution__",jsonPointer)` 读取原始输入、输出及执行契约，定位生产者与消费者之间的不一致。普通调用方可用 `capability_result_read(implementationId:"index")` 查看同一索引，再按返回的能力边界 ID 和 `/input`、`/output`、`/execution` 精确读取；读取不重执行业务。修订回执区分实现改动与仅更新依赖锁。
+
+原始进程返回 `{exitCode,signal,timedOut,aborted,stdout:{text,truncated},stderr:{text,truncated}}`，不提供业务 `status`；解析 JSON 应读取 `stdout.text`。
+
+提取保留已成功执行的目标内运行配置作为实现默认值；调用方只需提供独立变化的业务输入与宿主执行目标，必要时可覆盖配置。来源中的固定 venv、Node 私有前缀等不能仅因它们是路径就全部变为必填输入；这不代表把来源机器路径声明为所有平台通用默认值。
+
+构建会检查可静态确定的依赖输入字段：对象字面量、input 展开及其常量别名不能向 additionalProperties:false 的子能力泄漏父级字段；动态表达式仍由运行时 Schema 验证，不自动丢弃字段。全部可确定冲突一次返回。嵌套输入校验失败保留拒收边界原始输入，并在失败记录中给出 repairTarget（参数组装方）；以根能力发起的显式修订会据此选择实际目标，原子更新父级依赖锁，回执明确 requestedName 与实际 name。
+
+草稿保存与发布分开：证据读取未完成时仍保留明确标记为 unvalidated-draft 的已提交代码，随后返回缺失引用记录，不能发布。作者继续编辑同一草稿，不必因证据门禁重交整批代码。带业务失败 outcome 的依赖调用不能以裸 await 或未消费的 Promise.all 丢弃结果；父程序必须检查业务状态、消费真实子结果并完成汇总，不能在子步骤预检查后再运行原始完整入口。
+
+显式修订自动包含最初成功执行的来源会话，并保留能力原 sourceSessionId；当前失败会话作为本次修订证据，不能覆盖原始来源链。已执行的来源脚本优先通过 resourceSources 归档并调用其子操作，作者编写适配和汇总，不能把真实业务校验替换成成功标签。
+
+### 已执行 ESM 脚本的函数资源
+
+当脚本只公开粗粒度 CLI、内部已有所需函数时，resourceSources 的值可为 `{path:"绝对来源.mjs",call:"函数名",arguments:["输入字段"],bindings:{源变量名:"输入字段"}}`，目标资源也使用 .mjs。构建时保留原业务函数体，移出原 import、移除原 main().catch 启动调用，再生成现有 JSON main(input) 接口；entrypoint 可指定原启动函数名。resources.run 沿用现有协议，无新运行时。
+
+read_native_execution(view:source) 对可解析 ESM 脚本提供函数参数和顶层变量清单。作者选择真实函数并绑定调用字段；声明的变量绑定及无默认值函数参数必须提供，未绑定的来源配置保留原值。当前仅支持无 export 的独立 .mjs 脚本及其命名函数声明；已导出模块继续使用普通资源协议，Python/CJS 不适用该适配方式。该功能不自动重排工作流或证明业务完成，仍须真实执行验收。

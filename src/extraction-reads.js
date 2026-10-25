@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { draftDigest as hashDraft } from './generation-digest.js';
 
+export const EXTRACTION_READ_BYTES = 48000;
+
 export function selectDraftField(value, path) {
   if (typeof path !== 'string' || !path.startsWith('/') || path === '/') throw new Error('Read one explicit JSON pointer field, not the entire draft');
   for (const raw of path.slice(1).split('/')) {
@@ -40,7 +42,7 @@ export function createExtractionReads(task, persist) {
       const stale=new Set();
       for(const identity of fields.keys()) {
         if(!identity.startsWith('draft:') || identity.startsWith('draft:__protocol__:')) continue;
-        const match=identity.match(/^draft:([^:]+):(\/.*)$/);
+        const match=identity.match(/^draft:([^/]+)(\/.*)$/);
         const collection=draft.candidates;
         const item=match && Array.isArray(collection) && collection.find(item=>item?.name===match[1]);
         try {
@@ -63,7 +65,7 @@ export function createExtractionReads(task, persist) {
         task.duplicateReadsAvoided = (task.duplicateReadsAvoided || 0) + 1;
         return {alreadyRead:true,identity,digest,instruction:'Exact data is already in this phase context. Reuse it; do not request the same unchanged field again.'};
       }
-      if (Buffer.byteLength(JSON.stringify(value)) <= 10000) remember(identity,value,true);
+      if (Buffer.byteLength(JSON.stringify(value)) <= EXTRACTION_READ_BYTES) remember(identity,value,true);
       return value;
     },
     async preflight(session, config) {

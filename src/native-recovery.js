@@ -11,7 +11,7 @@ import { executionEvidence } from './snapshot.js';
 const SUBMIT = 'submit_recovery';
 const READ_EVIDENCE = 'read_recovery_evidence';
 const READ_RESOURCE = 'read_recovery_resource';
-const knownExternal = new Map([['AUTH','authentication'],['MISSING_CREDENTIAL','authentication'],['INVALID_CREDENTIAL','authentication'],['PERMISSION_DENIED','permission'],['APPROVAL_REQUIRED','permission']]);
+const knownExternal = new Map([['AUTH','authentication'],['MISSING_CREDENTIAL','authentication'],['INVALID_CREDENTIAL','authentication'],['PERMISSION_DENIED','permission'],['APPROVAL_REQUIRED','permission'],['EXECUTABLE_REQUIRED','environment'],['CLI_LAUNCHER_REQUIRED','environment'],['PROCESS_RUNTIME_UNAVAILABLE','environment'],['PROCESS_ACCESS_DENIED','permission']]);
 const safeCode = code => typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(code) ? code : 'RECOVERY_FAILED';
 const errorEvidence = (error, depth = 0) => {
   if (depth > 5 || !error) return undefined;
@@ -357,6 +357,7 @@ export function createNativeRecoveryService(ctx, { store, learningService, dataR
     async dispose() { disposed = true; await schedulingQueue; for (const item of maintenance.values()) item.controller.abort(); await Promise.allSettled([...maintenance.values()].map(item => item.done)); await Promise.allSettled([...maintenance.values()].filter(item => item.record.learningTaskId).map(item => learningService.cancel?.(item.record.learningTaskId))); },
     async recover({ entry, input, failure, receipt, trace, failureGuides, resourceEntries, exec, deadline, hostContext }) {
       if (!failure) throw new Error('Recovery requires an actual execution failure');
+      if (failure.stage === 'preflight') return {outcome:'external_blocked',category:'environment',reason:safeCode(failure.code),relatedSessions:[],usage:[],usageComplete:true};
       failureGuides ??= entry.docs ? [{ name:entry.name, version:entry.version, revisionId:entry.revisionId, docs:entry.docs }] : [];
       const category = knownExternal.get(failure?.code);
       if (category) return { outcome: 'external_blocked', category, reason: safeCode(failure.code), relatedSessions: [], usage: [], usageComplete: true };

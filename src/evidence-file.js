@@ -22,8 +22,6 @@ export async function writeEvidenceFile(path, evidence) {
   try {
     for (const record of recordsOf(evidence)) {
       const line = Buffer.from(JSON.stringify(record) + '\n');
-      // This is a host storage guard, not a model-context budget.
-      if (bytes + line.length > 64 * 1024 * 1024) throw new Error('Evidence file exceeds 64 MiB storage limit; nothing was truncated');
       await file.writeFile(line);
       hash.update(line);
       const value = record.value;

@@ -1,6 +1,8 @@
-import { deliverResult, resultPage } from './result-delivery.js';
+import { resolveExecutionTarget, targetProcess } from './execution-target.js';
+import { assertResultSelection, deliverSelectedResult, resultPage } from './result-delivery.js';
 import { fileURLToPath } from 'node:url';
 import { PROCESS_TOOL } from './native-process.js';
+import { processOutcome, acceptedProcessExitCodes } from './process-result.js';
 import { recoveryGuides } from './recovery-guides.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, appendFile, writeFile, readFile, lstat } from 'node:fs/promises';
@@ -13,7 +15,40 @@ import { sandboxDenied, nativeRetryMode, nativeApprovalOutcome } from './native-
 const json = value => JSON.parse(JSON.stringify(value));
 const hash = value => 'sha256:' + createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : 'UNKNOWN';
-const categories = { AUTH: 'external', PERMISSION_DENIED: 'external', APPROVAL_DENIED: 'external', USER_DENIED: 'external', POLICY_DENIED: 'external', CREDENTIALS_MISSING: 'external' };
+const categories = { AUTH: 'external', PERMISSION_DENIED: 'external', APPROVAL_DENIED: 'external', USER_DENIED: 'external', POLICY_DENIED: 'external', CREDENTIALS_MISSING: 'external', EXECUTABLE_REQUIRED:'external', CLI_LAUNCHER_REQUIRED:'external', PROCESS_RUNTIME_UNAVAILABLE:'external', PROCESS_ACCESS_DENIED:'external' };
+function executionReview(trace) {
+  const implementations = {}, boundaries = new Map();
+  for (const event of trace.events) {
+    if (event.type === 'implementation/start') implementations[event.implementationId] = {
+      name:event.name, version:event.version, revisionId:event.revisionId,
+      input:event.input, execution:event.execution,
+    };
+    if (event.type !== 'implementation/end' || !implementations[event.implementationId]) continue;
+    const item = implementations[event.implementationId];
+    if (Object.hasOwn(event,'value')) item.output = event.value;
+    if (event.error) item.error = event.error;
+    const outputIssues = !item.error && Object.hasOwn(event,'value') ? validateExecutionOutput(item.execution,event.value) : [];
+    if (outputIssues.length) item.error = {code:'OUTPUT_SCHEMA_INVALID',issues:outputIssues};
+    item.outcome = item.error ? {status:'failed'} : businessOutcome(item.execution,event.value);
+    const key = item.name+'@'+item.version;
+    const row = boundaries.get(key) ?? {name:item.name,version:item.version,outcomes:{},examples:{}};
+    row.outcomes[item.outcome.status] = (row.outcomes[item.outcome.status] ?? 0)+1;
+    row.examples[item.outcome.status] = '/implementations/'+event.implementationId;
+    boundaries.set(key,row);
+  }
+  const rejectedBoundary = trace.receipt.businessOutcome?.status !== 'completed' && Object.values(implementations).find(item => item.error?.code);
+  const failure = trace.events.findLast(event => event.type === 'execution/end')?.failure ?? (rejectedBoundary ? {
+    code:rejectedBoundary.error.code,capability:rejectedBoundary.name,
+    ...(rejectedBoundary.error.issues ? {validationIssues:rejectedBoundary.error.issues} : {}),
+    ...(rejectedBoundary.error.diagnostic ? {diagnostic:rejectedBoundary.error.diagnostic} : {}),
+    repairTarget:rejectedBoundary.error.repairTarget ?? {name:rejectedBoundary.name,version:rejectedBoundary.version,revisionId:rejectedBoundary.revisionId},
+  } : undefined);
+  const summary = {runId:trace.header.runId,root:trace.receipt.capability,
+    ...(trace.receipt.businessOutcome ? {outcome:trace.receipt.businessOutcome} : {}),
+    ...(failure ? {failure} : {}),
+    boundaries:[...boundaries.values()],read:{tool:'read_native_draft',name:'__execution__',jsonPointer:'Use an examples pointer, then /input, /output or /execution'}};
+  return {summary,implementations};
+}
 class ExecutionFault extends Error {
   constructor(identity, stage, category = 'internal', detail) { super(identity); this.code = identity; this.stage = stage; this.category = category; this.detail = detail; }
 }
@@ -25,7 +60,7 @@ const constraints = {
 
 /** Programs are DSH-authored data executed only by the host's public PTC service. */
 export function createNativeExecutionService(ctx, store, {
-  dataRoot, timeoutMs = 120000, maxCalls = 100, maxDepth = 8, maxOutputBytes = 65536, recover, nodeExecutable=process.execPath, pythonExecutable="python3", executables={},
+  dataRoot, timeoutMs = 120000, maxCalls = Number.MAX_SAFE_INTEGER, maxDepth = 8, maxOutputBytes = 65536, recover, nodeExecutable=process.execPath, pythonExecutable="python3", executables={},
 } = {}) {
   if (!dataRoot) throw new Error('Execution dataRoot is required');
   for (const [key, value] of Object.entries({ timeoutMs, maxCalls, maxDepth, maxOutputBytes })) if (!Number.isSafeInteger(value) || value < 1) throw new Error('Invalid execution bound: ' + key);
@@ -73,7 +108,7 @@ export function createNativeExecutionService(ctx, store, {
         const priorHeader = JSON.parse(await readFile(join(prior, 'header.json'), 'utf8'));
         if (priorHeader.sessionId !== header.sessionId || priorHeader.executionContext?.id !== header.executionContext?.id || priorHeader.rootCallId !== header.rootCallId) throw new ExecutionFault('RESUME_AUTHORITY_MISMATCH', 'admission');
         const events = (await readFile(join(prior, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
-        for (const item of events) if (item.type === 'dispatch/end' && item.status === 'succeeded' && item.reusable === true) ledger.reuse.set(item.stepId, item);
+        for (const item of events) if (item.type === 'dispatch/end' && item.status === 'succeeded' && item.reusable === true && (item.name !== PROCESS_TOOL || processOutcome(item.value, item.acceptedExitCodes ?? [0]).ok)) ledger.reuse.set(item.stepId, item);
         ledger.relatedSessions.push(...(JSON.parse(await readFile(join(prior, 'receipt.json'), 'utf8'))).relatedSessions ?? []);
       }
     }
@@ -86,7 +121,7 @@ export function createNativeExecutionService(ctx, store, {
     if (++ledger.count > maxCalls) throw new ExecutionFault('EXECUTION_CALL_LIMIT', 'dispatch');
   };
   const track = (ledger, promise) => { ledger.pending.add(promise); promise.then(() => ledger.pending.delete(promise), () => ledger.pending.delete(promise)); return promise; };
-  async function callTool(request, exec, ledger, owner) {
+  async function callTool(request, exec, ledger, owner, acceptedExitCodes = [0]) {
     check(ledger);
     if (!request || typeof request.name !== 'string' || !request.name || request.name === 'capability_run' || request.name === 'run_code') throw new ExecutionFault('INVALID_NATIVE_TOOL', 'dispatch');
     const stepId = `${ledger.runId}:${ledger.steps.length + 1}`;
@@ -110,6 +145,8 @@ export function createNativeExecutionService(ctx, store, {
     };
     const outcomeCode = outcome => ({ rejected: 'APPROVAL_DENIED', cancelled: 'APPROVAL_CANCELLED', unavailable: 'APPROVAL_UNAVAILABLE' })[outcome] ?? 'APPROVAL_UNAVAILABLE';
     const execute = async () => {
+      step.dispatchedAt=new Date().toISOString();
+      await ledger.event({type:'dispatch/execute',...step});
       if (ledger.authorizationFailure) throw ledger.authorizationFailure;
       const session = exec.agent?.session;
       const since = session?.seq;
@@ -146,10 +183,12 @@ export function createNativeExecutionService(ctx, store, {
       step.approvalRetry = { callId: retryCallId, mode, outcome };
       return retried;
     };
-    // Serialize native dispatches conservatively: generated Promise.all must not
-    // overlap effects whose tool contract classifies them as exclusive.
-    const running = ledger.toolTail.then(execute);
-    ledger.toolTail = running.catch(() => {});
+    // Managed process concurrency follows the executable program's await/Promise.all.
+    // Other native tools retain their exclusive scheduling barrier.
+    const parallel = request.name === PROCESS_TOOL;
+    const running = (parallel ? (ledger.exclusiveTail ?? Promise.resolve()) : ledger.toolTail).then(execute);
+    if(parallel)ledger.toolTail=Promise.all([ledger.toolTail,running]).catch(()=>{});
+    else {ledger.toolTail=running.catch(()=>{});ledger.exclusiveTail=ledger.toolTail;}
     let result;
     try { result = await track(ledger, running); }
     catch (error) {
@@ -165,8 +204,11 @@ export function createNativeExecutionService(ctx, store, {
       await ledger.event({ type: 'dispatch/end', ...step, error: result.error, content: result.content, reusable: false });
       throw new ExecutionFault(step.code, 'native-tool', categories[step.code] ?? 'unknown');
     }
-    step.status = 'succeeded'; step.outputDigest = hash(result.value);
-    await ledger.event({ type: 'dispatch/end', ...step, value: result.value, content: result.content, reusable: true });
+    const outcome = request.name === PROCESS_TOOL ? processOutcome(result.value, acceptedExitCodes) : {ok:true};
+    step.status = outcome.ok ? 'succeeded' : 'failed'; step.outputDigest = hash(result.value);
+    if (!outcome.ok) step.code = outcome.code;
+    await ledger.event({ type: 'dispatch/end', ...step, value: result.value, content: result.content, reusable: outcome.ok,
+      ...(request.name === PROCESS_TOOL ? {acceptedExitCodes} : {}) });
     // Nested images/context are not silently injected into the calling model.
     // All program-visible data stays behind the black-box contract.
     return json(result.value);
@@ -178,38 +220,92 @@ export function createNativeExecutionService(ctx, store, {
     if (path.includes(identity)) throw new ExecutionFault('CAPABILITY_CYCLE', 'admission');
     const contract = normalizeExecution(execution);
     if (!contract) throw new ExecutionFault('EXECUTION_IMPLEMENTATION_MISSING', 'admission');
-    const inputErrors = validateExecutionInput(contract, input);
-    if (inputErrors.length) throw new ExecutionFault('INPUT_SCHEMA_INVALID', 'input', 'internal', inputErrors);
-    const { ptc, policy } = services();
-    if (contract.language!=='python' && (!ptc?.resolve || !ptc?.run || ptc.language !== 'typescript' || ptc.isolation !== 'process' || !policy?.resolve)) throw new ExecutionFault('NATIVE_PTC_UNAVAILABLE', 'admission', 'external');
+    if (ledger.executionTarget && contract.target !== 'docker') throw new ExecutionFault('EXECUTION_TARGET_MISMATCH','admission');
+    let executionTarget = ledger.executionTarget;
+    if (executionTarget) {
+      const selected = resolveExecutionTarget(contract,{executionTarget:{...executionTarget,...input?.executionTarget}});
+      if (selected.container !== executionTarget.container || (selected.dockerExecutable ?? 'docker') !== (executionTarget.dockerExecutable ?? 'docker')) throw new ExecutionFault('EXECUTION_TARGET_MISMATCH','admission');
+      executionTarget = selected;
+      input = {...input,executionTarget};
+    }
     const implementationId = `${ledger.runId}:implementation:${ledger.implementations.length + 1}`;
     const implementation = { implementationId, name: owner.name, version: owner.version, revisionId: owner.revisionId, input: json(input), execution: contract, dependencies: owner.dependencies ?? [] };
     ledger.implementations.push({ implementationId, name: owner.name, version: owner.version, revisionId: owner.revisionId, digest: hash(contract) });
     await ledger.event({ type: 'implementation/start', ...implementation });
+    const inputErrors = validateExecutionInput(contract, input);
+    if (inputErrors.length) {
+      await ledger.event({type:'implementation/end',implementationId,error:{code:'INPUT_SCHEMA_INVALID',issues:inputErrors}});
+      throw new ExecutionFault('INPUT_SCHEMA_INVALID', 'input', 'internal', inputErrors);
+    }
+    const { ptc, policy } = services();
+    if (contract.language!=='python' && (!ptc?.resolve || !ptc?.run || ptc.language !== 'typescript' || ptc.isolation !== 'process' || !policy?.resolve)) throw new ExecutionFault('NATIVE_PTC_UNAVAILABLE', 'admission', 'external');
+    const processRequest = request => targetProcess(executionTarget,request);
     const bindings = {
       input: async () => json(input),
-      tool: async request => callTool(request, exec, ledger, owner),
+      tool: async request => {if(ledger.executionTarget)throw new ExecutionFault('TARGET_NATIVE_TOOL_UNSUPPORTED','dispatch','internal','Use managed processes/resources inside the target');return callTool(request, exec, ledger, owner);},
       process: async request => {
         if (!request || typeof request!=='object') throw new ExecutionFault('INVALID_PROCESS_REQUEST','dispatch');
-        return callTool({name:PROCESS_TOOL,arguments:{...request,timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))}},exec,ledger,owner);
+        return callTool({name:PROCESS_TOOL,arguments:processRequest({...request,timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))})},exec,ledger,owner);
+      },
+      processChecked: async request => {
+        if (!request || typeof request !== 'object') throw new ExecutionFault('INVALID_PROCESS_REQUEST','dispatch');
+        const {acceptedExitCodes, ...parameters} = request;
+        const accepted = acceptedProcessExitCodes(acceptedExitCodes);
+        const result = await callTool({name:PROCESS_TOOL, arguments:processRequest({...parameters,timeoutMs:Math.max(1,Math.min(parameters.timeoutMs ?? 120000,ledger.deadline-Date.now()))})},exec,ledger,owner,accepted);
+        const outcome = processOutcome(result,accepted);
+        if (!outcome.ok) throw new ExecutionFault(outcome.code,'process',outcome.category,result);
+        return result;
       },
       script: async request => {
         if (!request || typeof request.path!=='string') throw new ExecutionFault('INVALID_RESOURCE_PATH','resource');
+        const argv=request.args !== undefined;
+        if(argv && (!Array.isArray(request.args) || request.args.some(value=>typeof value!=='string'))) throw new ExecutionFault('INVALID_RESOURCE_ARGS','resource');
+        const callScriptTool = async toolRequest => {
+          try {
+            const result = await callTool(toolRequest,exec,ledger,owner);
+            const outcome = processOutcome(result,[0]);
+            if (!argv && !outcome.ok) throw new ExecutionFault(outcome.code,'process',outcome.category,result);
+            return result;
+          }
+          catch (error) {
+            if (!argv && error.code === 'PROCESS_EXIT_FAILED') {
+              const stderr=error.detail?.stderr?.text ?? '';
+              const marker=stderr.split('\n').findLast(line=>line.startsWith('[skillx-script-error]'));
+              let detail; try { detail=JSON.parse(marker.slice('[skillx-script-error]'.length)); } catch {}
+              if (['SCRIPT_OUTPUT_NOT_JSON','SCRIPT_PROGRAM_FAILED'].includes(detail?.code)) {
+                const message=typeof detail.message === 'string' ? detail.message.slice(0,500) : stderr.split('\n').find(line=>line && !line.startsWith('[skillx-script-error]'))?.slice(0,500) ?? '';
+                const dependency=['MODULE_NOT_FOUND','ERR_MODULE_NOT_FOUND'].includes(detail.errorCode);
+                const specifier=/^Cannot find (?:module|package) ['"]([^'"]+)['"]/.exec(message)?.[1];
+                const bare=specifier && !/^(?:[./\\]|[A-Za-z]:)/.test(specifier);
+                Object.assign(error,{code:detail.code,stage:'program',category:dependency ? bare ? 'external' : 'unknown' : 'internal',scriptDiagnostic:{resourcePath:request.path,message,...(detail.errorCode ? {errorCode:code(detail.errorCode)} : {})}});
+              }
+            }
+            throw error;
+          }
+        };
+        if (ledger.executionTarget) {
+          const files={...owner.resources,...(request.path==='@entry'?{'entry.py':contract.program}:{})};
+          const result=await callScriptTool({name:PROCESS_TOOL,arguments:targetProcess(executionTarget,{...request,timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))},{files,path:request.path==='@entry'?'entry.py':request.path,input:request.input ?? input})});
+          if(argv) return result;
+          try{return JSON.parse(result.stdout.text);}catch{throw new ExecutionFault('SCRIPT_OUTPUT_INVALID','output');}
+        }
         const entryPath=request.path==='@entry'?await store.resolveEntry(owner,{signal:ledger.signal}):await store.resolveResource(owner,request.path,{signal:ledger.signal});
         const paths={};
         for(const path of Object.keys(owner.resources ?? {})) paths[path]=await store.resolveResource(owner,path,{signal:ledger.signal});
         const runtime=request.path==='@entry'?'python':request.path.endsWith('.py')?'python':'node';
         const context={resources:paths,nodeExecutable,pythonExecutable,executables};
-        const args=runtime==='node'?[fileURLToPath(new URL('./script-bootstrap.cjs',import.meta.url)),entryPath]:[entryPath];
-        const result=await callTool({name:PROCESS_TOOL,arguments:{executable:runtime==='node'?'@node':'@python',args,
+        const args=argv?[entryPath,...request.args]:runtime==='node'?[fileURLToPath(new URL('./script-bootstrap.cjs',import.meta.url)),entryPath]:[entryPath];
+        const result=await callScriptTool({name:PROCESS_TOOL,arguments:{executable:request.executable ?? (runtime==='node'?'@node':'@python'),args,
+          ...(request.env ? {env:request.env}:{}),
           ...(request.cwd ? {cwd:request.cwd}:{}),...(request.pathPrefix ? {pathPrefix:request.pathPrefix}:{}),
-          inheritEnv:request.inheritEnv ?? [],stdin:JSON.stringify({input:request.input ?? input,context}),
-          timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))}},exec,ledger,owner);
-        if(result.exitCode!==0 || result.timedOut || result.aborted || result.stdout?.truncated || result.stderr?.truncated) throw new ExecutionFault('SCRIPT_EXECUTION_FAILED','program','unknown',result.stderr?.text);
+          inheritEnv:request.inheritEnv ?? [],stdin:argv?(request.stdin ?? ''):JSON.stringify({input:request.input ?? input,context}),
+          timeoutMs:Math.max(1,Math.min(request.timeoutMs ?? 120000,ledger.deadline-Date.now()))}});
+        if(argv) return result;
         try {return JSON.parse(result.stdout.text);} catch {throw new ExecutionFault('SCRIPT_OUTPUT_INVALID','output');}
       },
       resource: async request => {
         check(ledger);
+        if(ledger.executionTarget)throw new ExecutionFault('REMOTE_RESOURCE_PATH_UNAVAILABLE','resource','internal','Use resources.run; target paths are invocation scoped');
         if (typeof request?.path !== 'string') throw new ExecutionFault('INVALID_RESOURCE_PATH', 'resource');
         return store.resolveResource(owner, request.path, {signal:ledger.signal});
       },
@@ -236,30 +332,57 @@ export function createNativeExecutionService(ctx, store, {
           definition = bundle.root;
         }
         if (definition.version !== lock.version) throw new ExecutionFault('CAPABILITY_DEPENDENCY_CHANGED', 'dependency');
-        try { return await executeProgram(definition.execution, request.input, exec, ledger, definition, [...path, identity]); }
-        catch (error) { ledger.failedCapability ??= {name:definition.name,version:definition.version,revisionId:definition.revisionId}; throw error; }
+        const childInput = executionTarget ? {...request.input,executionTarget:{...executionTarget,...request.input?.executionTarget}} : request.input;
+        try { return await executeProgram(definition.execution, childInput, exec, ledger, definition, [...path, identity]); }
+        catch (error) {
+          error.capability ??= {name:definition.name,version:definition.version,revisionId:definition.revisionId};
+          error.repairTarget ??= error.code === 'INPUT_SCHEMA_INVALID' ? {name:owner.name,version:owner.version,revisionId:owner.revisionId} : error.capability;
+          throw error;
+        }
       },
       // Legacy programs fail into internal recovery rather than starting a model on the normal path.
       reason: async () => { throw new ExecutionFault('AGENT_INTERVENTION_REQUIRES_FAILURE', 'program'); },
     };
     if(contract.language==='python'){
       const value=await track(ledger,bindings.script({path:'@entry',input}));
-      await ledger.event({type:'implementation/end',implementationId,value});
       const errors=validateExecutionOutput(contract,value);
+      await ledger.event({type:'implementation/end',implementationId,value,...(errors.length ? {error:{code:'OUTPUT_SCHEMA_INVALID',issues:errors}} : {})});
       if(errors.length)throw new ExecutionFault('OUTPUT_SCHEMA_INVALID','output','internal',errors);
       return value;
     }
-    const functions = Object.fromEntries(Object.entries(bindings).map(([name, fn]) => [name, request => track(ledger, Promise.resolve().then(() => fn(request)))]));
-    const program = `const input = await __native_capability.input({});\nconst tools = Object.freeze({call: request => __native_capability.tool(request), reuse: request => __native_capability.reuse(request)});\nconst capabilities = Object.freeze({run: request => __native_capability.capability(request), reason: request => __native_capability.reason(request)});\nconst resources = Object.freeze({path: path => __native_capability.resource({path}), run: request => __native_capability.script(JSON.parse(JSON.stringify(request)))});\nconst processes = Object.freeze({run: request => __native_capability.process(JSON.parse(JSON.stringify(request)))});\n${contract.program}`;
+    // PTC transports rejection messages, not Error.code/stage. Retain host
+    // faults here and recognize only an uncaught, typed binding rejection.
+    const hostFaults = new Map();
+    const functions = Object.fromEntries(Object.entries(bindings).map(([name, fn]) => [name, request => track(ledger, Promise.resolve().then(() => fn(request)).catch(error => {
+      const identity = code(error.code);
+      if (identity === 'UNKNOWN') throw error;
+      const fault = error instanceof ExecutionFault ? error : new ExecutionFault(identity,'dispatch','unknown',error.message);
+      const reference=identity+':'+hostFaults.size;
+      hostFaults.set(reference,fault);
+      const diagnostic = fault.scriptDiagnostic?.message;
+      throw Object.assign(new Error(reference+(diagnostic ? '\n'+diagnostic : '')),{code:identity});
+    }))]));
     const host = contextOf(exec);
+    // PTC executes an ESM-created AsyncFunction. Supply CommonJS loading in an
+    // outer scope so existing programs can still declare their own require.
+    const moduleBase = join(host?.cwd ?? exec.agent.session.header.cwd, '__skillx_entry.cjs');
+    const program = `const require = (await import('node:module')).createRequire(${JSON.stringify(moduleBase)});\nconst __skillxOutput = await (async () => {\nconst input = await __native_capability.input({});\nconst tools = Object.freeze({call: request => __native_capability.tool(JSON.parse(JSON.stringify(request))), reuse: request => __native_capability.reuse(request)});\nconst capabilities = Object.freeze({run: request => __native_capability.capability(JSON.parse(JSON.stringify(request))), reason: request => __native_capability.reason(request)});\nconst resources = Object.freeze({path: path => __native_capability.resource({path}), run: request => __native_capability.script(JSON.parse(JSON.stringify(request)))});\nconst processes = Object.freeze({run: request => __native_capability.process(JSON.parse(JSON.stringify(request))), checkedRun: request => __native_capability.processChecked(JSON.parse(JSON.stringify(request)))});\n${contract.program}\n})();\nreturn JSON.parse(JSON.stringify(__skillxOutput));`;
     const sandboxPolicy = host ? { mode: 'danger-full-access', workspaceRoot: host.cwd } : policy.resolve({ session: exec.agent.session });
-    const spec = ptc.resolve({ program, bindings: [{ global: '__native_capability', functions }],
+    const spec = ptc.resolve({ program, bindings: [{ global: '__native_capability', functions, errorClass:{name:'SkillXHostError',memberNameProperty:'binding'} }],
       cwd: host?.cwd ?? exec.agent.session.header.cwd, signal: ledger.signal, sandboxPolicy, timeoutMs: Math.max(1, ledger.deadline - Date.now()) });
     const result = await track(ledger, ptc.run(spec));
-    await ledger.event({ type: 'implementation/end', implementationId, sandbox: result.sandbox, logs: result.logs, error: result.error, ...(result.error ? {} : { value: result.value }) });
+    const hostReference = result.error?.kind === 'exception' && /^SkillXHostError: ([A-Z][A-Z0-9_]{0,79}:[0-9]+)(?:\n|$)/.exec(result.error.message);
+    const hostError = hostReference && hostFaults.get(hostReference[1]);
+    const recordedError = hostError ? {code:hostError.code,stage:hostError.stage,category:hostError.category,
+      ...(hostError.scriptDiagnostic ? {diagnostic:hostError.scriptDiagnostic} : {}),
+      ...(hostError.repairTarget ? {repairTarget:hostError.repairTarget} : {}),
+      ...(['INPUT_SCHEMA_INVALID','OUTPUT_SCHEMA_INVALID'].includes(hostError.code) ? {issues:hostError.detail} : {})} : result.error;
+    const outputErrors = result.error ? [] : validateExecutionOutput(contract, result.value);
+    await ledger.event({ type: 'implementation/end', implementationId, sandbox: result.sandbox, logs: result.logs,
+      ...(recordedError ? {error:recordedError} : {value:result.value,...(outputErrors.length ? {error:{code:'OUTPUT_SCHEMA_INVALID',issues:outputErrors}} : {})}) });
     if (ledger.authorizationFailure) throw ledger.authorizationFailure;
+    if (hostError) throw hostError;
     if (result.error) throw new ExecutionFault('PROGRAM_' + result.error.kind.replaceAll('-', '_').toUpperCase(), 'program', ledger.nativeFailures.length ? 'unknown' : 'internal', result.error);
-    const outputErrors = validateExecutionOutput(contract, result.value);
     if (outputErrors.length) throw new ExecutionFault('OUTPUT_SCHEMA_INVALID', 'output', 'internal', outputErrors);
     return result.value;
   }
@@ -270,6 +393,33 @@ export function createNativeExecutionService(ctx, store, {
       ledger = await newLedger(exec, options.resumeEvidence, { ...options, capability: { name: owner.name, kind: owner.kind, version: owner.version, revisionId: owner.revisionId } });
       ledger.boundDefinitions = new Map((options.bundleEntries || [owner]).map(entry => [entry.name, entry]));
       active.add(ledger);
+      ledger.executionTarget=resolveExecutionTarget(execution,input);
+      if(ledger.executionTarget){
+        await ledger.event({type:'execution/target',target:ledger.executionTarget});
+        try {
+          const result=await callTool({name:PROCESS_TOOL,arguments:targetProcess(ledger.executionTarget,{executable:'@node',args:['-p','process.platform'],timeoutMs:10000})},exec,ledger,owner);
+          if(!processOutcome(result).ok || result.stdout.text.trim()!=='linux')throw new Error('Container must be running with Node on Linux');
+        } catch(error){throw new ExecutionFault('EXECUTION_TARGET_UNAVAILABLE','preflight','external',error.message);}
+      }
+      const verified = new Set();
+      for (const entry of ledger.boundDefinitions.values()) for (const probe of entry.compatibility?.probes ?? []) {
+        const key = JSON.stringify(probe);
+        if (verified.has(key)) continue;
+        try {
+          const {stdoutIncludes, ...parameters} = probe;
+          const result = await callTool({name:PROCESS_TOOL,arguments:targetProcess(ledger.executionTarget,{...parameters,timeoutMs:Math.max(1,Math.min(parameters.timeoutMs ?? 5000,ledger.deadline-Date.now()))})},exec,ledger,entry);
+          const outcome = processOutcome(result);
+          if (!outcome.ok) throw new ExecutionFault(outcome.code,'preflight','external',result);
+          if (stdoutIncludes !== undefined && !result.stdout.text.includes(stdoutIncludes)) throw new ExecutionFault('ENVIRONMENT_OUTPUT_MISMATCH','preflight','external',result);
+          verified.add(key);
+          await ledger.event({type:'environment/verified',capability:entry.name,probe});
+        } catch (error) {
+          ledger.failedCapability = {name:entry.name,version:entry.version,revisionId:entry.revisionId};
+          ledger.failedEnvironmentCheck = {executable:probe.executable,...(probe.stdoutIncludes === undefined ? {} : {expectedStdoutIncludes:probe.stdoutIncludes})};
+          if (ledger.authorizationFailure) throw ledger.authorizationFailure;
+          throw new ExecutionFault(code(error.code),'preflight','external',error.detail ?? error.message);
+        }
+      }
       const output = await executeProgram(execution, json(input ?? {}), exec, ledger, owner, []);
       // A program must await every host call. Returning while bindings remain
       // active is an implementation failure, not permission to finish effects
@@ -293,7 +443,13 @@ export function createNativeExecutionService(ctx, store, {
       // rather than sending a declined/cancelled operation into model repair.
       const failed = ledger?.authorizationFailure ?? error;
       const timedOut = ledger?.timedOut && !ledger.authorizationFailure;
-      const failure = { capability: ledger?.failedCapability?.name ?? owner.name, capabilityVersion: ledger?.failedCapability?.version ?? owner.version, capabilityRevisionId: ledger?.failedCapability?.revisionId ?? owner.revisionId, code: timedOut ? 'EXECUTION_TIMEOUT' : code(failed.code), category: timedOut ? 'unknown' : failed.category ?? 'unknown', stage: failed.stage ?? 'infrastructure', retryable: false,
+      const failureOwner=failed.capability ?? ledger?.failedCapability ?? owner;
+      const failure = { capability: failureOwner.name, capabilityVersion: failureOwner.version, capabilityRevisionId: failureOwner.revisionId, code: timedOut ? 'EXECUTION_TIMEOUT' : code(failed.code), category: timedOut ? 'unknown' : failed.category ?? 'unknown', stage: failed.stage ?? 'infrastructure', retryable: false,
+        ...(['INPUT_SCHEMA_INVALID','OUTPUT_SCHEMA_INVALID'].includes(failed.code) ? {validationIssues:failed.detail} : {}),
+        ...(failed.repairTarget ? {repairTarget:failed.repairTarget} : {}),
+        ...(failed.scriptDiagnostic ? {diagnostic:failed.scriptDiagnostic} : {}),
+        ...(ledger ? {read:{tool:'capability_result_read',runId:ledger.runId,stepId:'index'}} : {}),
+        ...(ledger?.failedEnvironmentCheck ? {environmentCheck:ledger.failedEnvironmentCheck} : {}),
         ...(ledger?.nativeFailures.length ? { observedNativeFailures: ledger.nativeFailures.slice(-8) } : {}) };
       const receipt = { ...(ledger ? { runId: ledger.runId, startedAt: ledger.startedAt, deadline: ledger.deadline } : {}), status: 'failed',
         capability: { name: owner.name, version: owner.version, revisionId: owner.revisionId }, steps: ledger?.steps ?? [],
@@ -309,13 +465,15 @@ export function createNativeExecutionService(ctx, store, {
     } finally { if (ledger) { clearTimeout(ledger.timer); ledger.controller.abort(); active.delete(ledger); } }
   }
   const service = {
-    delivery(output, receipt) {
-      const result = deliverResult(output, receipt.runId, Math.min(maxOutputBytes, 16384));
+    delivery(output, receipt, select) {
+      const result = deliverSelectedResult(output, receipt.runId, Math.min(maxOutputBytes, 16384), select);
       if (receipt.steps?.length) result.delivery.observations = {tool:'capability_result_read',runId:receipt.runId,stepId:'index',instruction:'Retained native observations, including query details omitted from the final summary. Read only needed entries; never requery solely for detail.'};
       return result;
     },
-    async readResult({runId, pointer, offset, limit, stepId, jsonTextPointer}, exec) {
+    async readResult({runId, pointer, offset, limit, stepId, implementationId, jsonTextPointer, select}, exec) {
       authority(exec);
+      assertResultSelection(select);
+      if (select !== undefined && [pointer,offset,limit,stepId,implementationId,jsonTextPointer].some(value => value !== undefined)) throw new ExecutionFault('INVALID_RESULT_SELECTION','result');
       if (jsonTextPointer !== undefined && (stepId === undefined || stepId === 'index')) throw new ExecutionFault('INVALID_RESULT_JSON_TEXT_SOURCE','result');
       if (typeof runId !== 'string' || !/^[a-f0-9-]{36}$/.test(runId)) throw new ExecutionFault('INVALID_RESULT_REFERENCE', 'result');
       const directory = join(tracesRoot, runId);
@@ -323,10 +481,21 @@ export function createNativeExecutionService(ctx, store, {
       // Subsequent tool calls have different rootCallIds; the owning session is
       // the stable authority. Workbench outputs cannot be read by a chat.
       if (!exec.agent?.session.header.id || header.sessionId !== exec.agent.session.header.id || header.executionContext) throw new ExecutionFault('RESULT_AUTHORITY_MISMATCH', 'result', 'external');
+      if (implementationId !== undefined) {
+        if (stepId !== undefined || jsonTextPointer !== undefined) throw new ExecutionFault('INVALID_RESULT_SELECTION','result');
+        const review = await service.review(runId,exec);
+        const value = implementationId === 'index' ? {...review.summary,read:{tool:'capability_result_read',runId,implementationId:'index'}} : review.implementations[implementationId.replace(/^\/implementations\//,'')];
+        if (!value) return {runId,error:{code:'RESULT_IMPLEMENTATION_NOT_FOUND'},read:{tool:'capability_result_read',runId,implementationId:'index',pointer:''}};
+        try { return {runId,implementationId,...resultPage(value,{pointer,offset,limit})}; }
+        catch (error) {
+          if (error.message !== 'RESULT_POINTER_NOT_FOUND') throw error;
+          return {runId,error:{code:error.message,pointer},read:{tool:'capability_result_read',runId,implementationId,pointer:''}};
+        }
+      }
       if (stepId !== undefined) {
         if (stepId !== 'index' && (typeof stepId !== 'string' || !stepId.startsWith(runId + ':') || !/^[1-9][0-9]*$/.test(stepId.slice(runId.length + 1)))) throw new ExecutionFault('INVALID_RESULT_STEP', 'result');
         const events = (await readFile(join(directory, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
-        const observations = events.filter(event => event.type === 'dispatch/end' && event.status === 'succeeded' && Object.hasOwn(event,'value'));
+        const observations = events.filter(event => event.type === 'dispatch/end' && Object.hasOwn(event,'value'));
         let value;
         if (stepId === 'index') value = observations.map(event => ({stepId:event.stepId,name:event.name,read:{runId,stepId:event.stepId,pointer:'',offset:0,limit:4000}}));
         else {
@@ -363,7 +532,8 @@ export function createNativeExecutionService(ctx, store, {
           await writeFile(join(directory, 'output.json'), JSON.stringify(output), {mode:0o600});
         }
       }
-      return {runId, ...resultPage(output, {pointer, offset, limit})};
+      return select === undefined ? {runId, ...resultPage(output, {pointer, offset, limit})}
+        : {runId, ...deliverSelectedResult(output,runId,Math.min(maxOutputBytes,16384),select)};
     },
     isHostCall(exec) {
       const host = hostEntry.getStore();
@@ -388,24 +558,25 @@ export function createNativeExecutionService(ctx, store, {
           if (restored.outcome === 'completed' && !exec.signal.aborted && Date.now() < deadline) {
             const receipt = { ...result.receipt, status:'completed', businessOutcome:businessOutcome(result.entry.execution,restored.output), recovered:true, finishedAt:new Date().toISOString(), outputDigest:'sha256:' + createHash('sha256').update(JSON.stringify(restored.output)).digest('hex') };
             if (receipt.runId) await writeFile(join(tracesRoot, receipt.runId, 'resolved.json'), JSON.stringify({receipt,output:restored.output}), {mode:0o600});
-            return {status:'completed',...service.delivery(restored.output,receipt),receipt};
+            return {status:'completed',...service.delivery(restored.output,receipt,request.select),receipt};
           }
           const failureCode = result.failure.observedNativeFailures?.at(-1)?.code ?? result.failure.code;
           return {status:'blocked',error:{category:result.failure.category,code:result.failure.code,recovery:{category:restored.category,code:restored.reason},originalFailure:result.failure,message:`Execution failed (${failureCode}); internal recovery could not complete the task (${restored.reason}). Inspect the retained execution records.`},receipt:result.receipt};
         }
         const receipt = json(result.receipt);
-        return result.ok ? { status: 'completed', ...service.delivery(result.output,receipt), receipt }
+        return result.ok ? { status: 'completed', ...service.delivery(result.output,receipt,request.select), receipt }
           : { status: 'blocked', error: { ...result.failure, message: result.failure.code === 'PLATFORM_UNSUPPORTED'
             ? `${result.failure.capability} does not support ${result.failure.platform}. ${result.failure.compatibility.limitations}`
             : 'Execution failed; inspect the retained execution record before retrying.' }, receipt };
       } finally { hostExecutions.delete(exec); }
     },
-    async readTrace(runId, exec) {
+    async review(runId,exec) { return executionReview(await service.readTrace(runId,exec,{sameSession:true})); },
+    async readTrace(runId, exec, {sameSession=false}={}) {
       authority(exec);
       if (typeof runId !== 'string' || !/^[a-f0-9-]{36}$/.test(runId)) throw new ExecutionFault('INVALID_TRACE_REFERENCE', 'trace');
       const directory = join(tracesRoot, runId);
       const header = JSON.parse(await readFile(join(directory, 'header.json'), 'utf8'));
-      if (header.sessionId !== exec.agent?.session.header.id || header.executionContext?.id !== contextOf(exec)?.id || header.rootCallId !== exec.rootCallId) throw new ExecutionFault('TRACE_AUTHORITY_MISMATCH', 'trace');
+      if (header.sessionId !== exec.agent?.session.header.id || (sameSession ? Boolean(header.executionContext) : header.executionContext?.id !== contextOf(exec)?.id || header.rootCallId !== exec.rootCallId)) throw new ExecutionFault('TRACE_AUTHORITY_MISMATCH', 'trace');
       const events = (await readFile(join(directory, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
       const receipt = JSON.parse(await readFile(join(directory, 'receipt.json'), 'utf8'));
       return { header, events, receipt };
@@ -416,7 +587,7 @@ export function createNativeExecutionService(ctx, store, {
       catch (error) { return { ok: false, failure: { code: 'CAPABILITY_LOAD_FAILED', category: 'internal', stage: 'dependency', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } }; }
       if (!bundle) return { ok: false, failure: { code: 'CAPABILITY_UNAVAILABLE', category: 'external', stage: 'admission', retryable: false }, receipt: { status: 'failed', capability: { name }, steps: [], constraints } };
       if (expectedRevisionId !== undefined && bundle.root.revisionId !== expectedRevisionId) throw new Error('Capability version changed before execution; reopen it before executing');
-      const incompatible = bundle.entries.find(entry => entry.compatibility && !entry.compatibility.platforms.includes(process.platform));
+      const incompatible = bundle.entries.find(entry => entry.compatibility && !entry.compatibility.platforms.includes(bundle.root.execution?.target === 'docker' ? 'linux' : process.platform));
       if (incompatible) return { ok: false, entry: bundle.root,
         failure: { code: 'PLATFORM_UNSUPPORTED', category: 'external', stage: 'admission', retryable: false,
           platform: process.platform, capability: incompatible.name, compatibility: incompatible.compatibility },

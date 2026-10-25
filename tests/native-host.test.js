@@ -98,3 +98,26 @@ test('literal process dispatch uses native confinement and Python entries keep t
     const manifest=JSON.parse(await readFile(join(dataRoot,'skillx','python-entry','manifest.json'),'utf8'));assert.equal(manifest.entry.runtime,'python');
   }finally{await runtime.dispose();}
 });
+
+
+test('native process failures retain stable codes through the real tool dispatcher',async t=>{
+  const f=await host(t,true);
+  const result=await f.ctx.tools.execute({name:'capability_process',arguments:{executable:'@node',args:[]},callId:'process-code',signal:new AbortController().signal});
+  assert.equal(result.isError,true);
+  assert.equal(result.error.info?.code,'PROCESS_RUNTIME_UNAVAILABLE',JSON.stringify(result));
+  await f.ctx.plugin(class extends Service {
+    constructor(ctx){super(ctx,'subprocess');}
+    spawn(){throw new Error('must not launch');}
+    resolveExecutable(){throw Object.assign(new Error('unavailable'),{name:'SubprocessExecutableNotFoundError'});}
+  });
+  await f.ctx.plugin(class extends Service {
+    constructor(ctx){super(ctx,'sandboxPolicy');}
+    resolve(){return {mode:'danger-full-access',workspaceRoot:f.dataRoot};}
+  });
+  for (const [executable,code] of [['missing-cli','EXECUTABLE_REQUIRED'],['missing.cmd','CLI_LAUNCHER_REQUIRED']]) {
+    const failed=await f.ctx.tools.execute({name:'capability_process',arguments:{executable},callId:'process-'+code,signal:new AbortController().signal});
+    assert.equal(failed.error.info?.code,code,JSON.stringify(failed));
+  }
+  await f.request('GET','catalog');
+  await f.fork.dispose();
+});

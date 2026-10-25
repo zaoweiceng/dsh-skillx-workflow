@@ -22,18 +22,6 @@ window.__ModuleLoader__.load({
     ])
     const displayDescription = description => descriptionTranslations.get(description) ?? description ?? ''
     const fieldLabels = { repo_path: '仓库路径', api_base_url: '模拟服务地址', api_doc_path: '接口文档路径', commit_message: '提交信息', baseline_sha: '基线提交 SHA', fixture_id: '环境标识', mr_title: '合并请求标题', idempotency_key_create: '创建幂等键', idempotency_key_merge: '合并幂等键', expected_changes: '预期文件变更', a: '数值 A', b: '数值 B' }
-    const stageLabels = new Map([
-      ['read API doc (contract governs every call)', '读取接口文档并确认调用约定'],
-      ['service state', '检查模拟服务状态'],
-      ['repo state', '检查仓库状态'],
-      ['commit exactly once', '提交待处理变更（仅一次）'],
-      ['verify commit', '验证提交结果'],
-      ['create simulated MR', '创建模拟合并请求'],
-      ['merge simulated MR', '合并模拟请求'],
-      ['mandatory readback', '回查合并结果'],
-      ['audit + final service/local verification', '审计并核验服务及本地状态'],
-      ['report', '输出执行报告'],
-    ])
     const dictionaries = {
       zh: { skillx: 'SkillX', workflow: '工作流', extract: '总结工作流', refresh: '刷新', open: '打开完整管理页面', empty: '暂无内容', loading: '加载中…', running: '正在总结工作流…', completed: '工作流总结完成', skipped: '未发现值得提取的可复用能力', failed: '工作流总结失败', dismiss: '关闭', manual: '工作流仅在你选择“总结工作流”时生成。', priority: '同名能力优先使用 SkillX 或工作流。' },
       en: { skillx: 'SkillX', workflow: 'Workflows', extract: 'Summarize workflow', refresh: 'Refresh', open: 'Open management page', empty: 'No entries yet', loading: 'Loading…', running: 'Summarizing workflow…', completed: 'Workflow summary completed', skipped: 'No worthwhile reusable capability found', failed: 'Workflow summary failed', dismiss: 'Dismiss', manual: 'Workflows are generated only when you choose “Summarize workflow”.', priority: 'SkillX and workflows take precedence over skills with the same name.' },
@@ -56,6 +44,8 @@ window.__ModuleLoader__.load({
     Object.assign(dictionaries.en, { elapsed: 'Duration', executionSettled: 'Execution settled', statusCompleted: 'Succeeded', statusFailed: 'Failed', statusRunning: 'Running' })
     Object.assign(dictionaries.zh, { savings: '预计 Token 节省', savingsBasis: '原始提取会话平均用量 × 成功复用次数 − 执行用量。按任务规模相当估算；不含调用方对话、提取及后台维护成本。负值表示额外消耗。', baselineTotal: '原始流程估算', executionTotal: '执行用量', estimatedRate: '估算节省率', estimatedRuns: '已估算执行', excludedRuns: '缺少基线或完整用量' })
     Object.assign(dictionaries.en, { savings: 'Expected token savings', savingsBasis: 'Average original extraction-session usage × successful reuses − execution usage. Assumes comparable workloads; excludes caller chat, extraction and background maintenance. Negative values mean extra usage.', baselineTotal: 'Estimated original usage', executionTotal: 'Execution usage', estimatedRate: 'Estimated savings rate', estimatedRuns: 'Estimated executions', excludedRuns: 'Missing baseline or complete usage' })
+    Object.assign(dictionaries.zh,{resumeExtraction:'继续提取草稿',graphSyntaxNote:'由当前程序及锁定版本子工作流自动生成，无需 Agent 编写图。并行表示程序调度结构；底层工具仍遵守宿主并发规则。黄色节点为无法静态证明的动态控制区间；虚线仅表示区间内可能调用，不表示执行顺序、次数或并行。'})
+    Object.assign(dictionaries.en,{resumeExtraction:'Resume extraction draft',graphSyntaxNote:'Generated from executable syntax and version-locked workflows, without Agent-authored graphs. Parallel syntax retains host tool scheduling rules. Amber blocks mark statically unresolved control flow.'})
     Object.assign(dictionaries.zh, { recordingFailed: '执行已结束，会话记录保存失败', fillObject: '填写对象', optionalParameters: '可选参数', execute: '执行', runConfig: '运行配置', formInput: '表单输入', jsonInput: 'JSON 输入', invalidJson: '请输入有效 JSON', chooseValue: '请选择', yes: '是', no: '否', addItem: '添加一项', removeItem: '删除此项', dag: '工作流 DAG', graphInput: '输入参数', graphOutput: '执行结果', graphNodes: '个节点', graphBoundary: '输入 / 输出', graphStage: '阶段', graphStagesNote: '执行阶段概览；分支和循环在阶段内执行。', graphProgramNote: '当前程序未定义独立阶段，按整体执行单元展示。', graphDependencies: '已声明依赖', needsContract: '此旧版能力尚无执行接口。可基于已有证据生成，无需填写会话 ID。', prepareContract: '生成执行接口', preparingContract: '正在生成执行接口…', noParameters: '此能力无需填写参数', runtimeOptions: '运行选项', workingDirectory: '工作目录', defaultDirectory: '使用宿主进程工作目录', disabledExecution: '能力已停用，请先在列表中启用。', runHistory: '执行记录', noRuns: '提交参数后将在这里展示执行结果。', executionSession: '查看执行会话', reasoningSession: '查看 LLM 节点对话', capabilityNotes: '能力说明与来源', interrupted: '执行中断', cancelling: '正在取消', contractPrepared: '执行接口已生成', contractFailed: '执行接口生成失败', statisticsInfo: '统计说明', shortSavings: '估算节省率', shortCoverage: '次执行', missingComparison: '次无法估算' })
     Object.assign(dictionaries.en, { recordingFailed: 'Execution settled; session recording failed', fillObject: 'Fill object', optionalParameters: 'Optional parameters', execute: 'Execute', runConfig: 'Run configuration', formInput: 'Form input', jsonInput: 'JSON input', invalidJson: 'Enter valid JSON', chooseValue: 'Select a value', yes: 'Yes', no: 'No', addItem: 'Add item', removeItem: 'Remove item', dag: 'Workflow DAG', graphInput: 'Input', graphOutput: 'Output', graphNodes: 'nodes', graphBoundary: 'Input / output', graphStage: 'Stage', graphStagesNote: 'Stage overview; branches and loops execute inside stages.', graphProgramNote: 'This program has no separate stages; shown as one execution unit.', graphDependencies: 'Declared dependencies', needsContract: 'This legacy capability needs an executable contract. Generate it from existing evidence without entering a session ID.', prepareContract: 'Generate execution interface', preparingContract: 'Generating execution interface…', noParameters: 'No input parameters required', runtimeOptions: 'Runtime options', workingDirectory: 'Working directory', defaultDirectory: 'Use the host process working directory', disabledExecution: 'Enable this capability in the list before executing.', runHistory: 'Execution history', noRuns: 'Submit parameters to see execution results here.', executionSession: 'Open execution session', reasoningSession: 'Open LLM node session', capabilityNotes: 'Capability notes and source', interrupted: 'Interrupted', cancelling: 'Cancelling', contractPrepared: 'Execution interface ready', contractFailed: 'Execution interface generation failed', statisticsInfo: 'Statistics details', shortSavings: 'Estimated savings rate', shortCoverage: 'executions', missingComparison: 'executions not estimated' })
     Object.assign(dictionaries.zh, {sessionNotReady:'会话尚未创建，请稍后重试'})
@@ -70,7 +60,7 @@ window.__ModuleLoader__.load({
       const raw = await response.text()
       let data
       try { data = JSON.parse(raw) } catch { throw new Error('Workflow service unavailable (HTTP ' + response.status + '). Check plugin startup and engine logs.') }
-      if (!response.ok || data.error) throw Object.assign(new Error(data.error?.message || data.error || response.statusText), { code: data.code, dependents: data.dependents })
+      if (!response.ok) throw Object.assign(new Error(data.error?.message || data.error || response.statusText), { code: data.code, dependents: data.dependents })
       return data
     }
     function Icon({ size = 16 }) {
@@ -102,16 +92,16 @@ window.__ModuleLoader__.load({
             update({ kind: 'running', operation: route, taskId: task.taskId, generatorSessionId: task.activeGeneratorSessionId || task.generatorSessionId })
             while (!disposed) {
               const status = await api('status?taskId=' + encodeURIComponent(task.taskId))
-              const info = { operation: route, taskId: task.taskId, generatorSessionId: status.activeGeneratorSessionId || status.generatorSessionId || task.generatorSessionId, entries: status.entries, outcome: status.outcome, detail: status.skipReason }
+              const info = { operation: route, taskId: task.taskId, generatorSessionId: status.activeGeneratorSessionId || status.generatorSessionId || task.generatorSessionId, entries: status.entries, outcome: status.outcome, detail: status.skipReason, name: status.name, canResume: !!(status.drafts?.plan || status.drafts?.build || status.plan) }
               if (['completed', 'done', 'succeeded'].includes(status.status)) { update({ kind: 'completed', ...info }); break }
-              if (['failed', 'error', 'cancelled'].includes(status.status)) { update({ kind: 'failed', detail: typeof status.error === 'string' ? status.error : JSON.stringify(status.error || status.status), ...info }); break }
+              if (['failed', 'error', 'cancelled'].includes(status.status)) { update({ kind: 'failed', ...info, detail: typeof status.error === 'string' ? status.error : JSON.stringify(status.error || status.status) }); break }
               update({ kind: 'running', ...info })
               await sleep()
             }
           } catch (error) { if (!disposed) update({ kind: 'failed', operation: route, detail: error.message }) }
           finally { pending.delete(key) }
         }
-        const extract = sessionId => runTask('extract', { sessionId })
+        const extract = sessionId => update({kind:'configure',sessionId})
         function DeleteEntry({ entry, onDeleted }) {
           const [confirming, setConfirming] = React.useState(false)
           const [busy, setBusy] = React.useState(false)
@@ -250,34 +240,36 @@ window.__ModuleLoader__.load({
             field, schema.description && h('p', { title: displayDescription(schema.description), style: { ...note, margin: '6px 0 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } }, displayDescription(schema.description)))
         }
         function WorkflowDag({ entry }) {
-          // Native workflows store programs, not the original engine's node
-          // schema. Numbered code sections form a coarse stage graph; never
-          // pretend they describe every conditional branch or loop.
-          const stages = [...(entry.execution?.program || '').matchAll(/^\s*\/\/\s*-+\s*\d+[.)]\s*(.*?)\s*-*\s*$/gm)].map(match => stageLabels.get(match[1]) ?? match[1]).filter(Boolean).slice(0, 40)
-          const nodes = [t('graphInput'), ...(stages.length ? stages : [entry.name]), t('graphOutput')]
-          const graphRef = React.useRef(null)
-          const [availableColumns, setAvailableColumns] = React.useState(2)
-          React.useEffect(() => { const observer = new ResizeObserver(([size]) => setAvailableColumns(size.contentRect.width >= 700 ? 3 : size.contentRect.width >= 360 ? 2 : 1)); observer.observe(graphRef.current); return () => observer.disconnect() }, [])
-          const columns = Math.min(availableColumns, nodes.length), width = columns * 256, height = Math.ceil(nodes.length / columns) * 126 + 12
-          const point = index => { const row = Math.floor(index / columns), column = index % columns; return { x: 24 + (row % 2 ? columns - 1 - column : column) * 256, y: 16 + row * 126, row } }
-          return h('article', { style: { ...card, marginBottom: 20 } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' } }, h('h3', { style: { fontSize: 15, margin: '0 0 16px' } }, t('dag')), h('span', { style: note }, nodes.length + ' ' + t('graphNodes'))),
-            h('div', { ref: graphRef, style: { overflow: 'auto', maxHeight: 520, background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 10, padding: 8 } },
-              h('svg', { viewBox: '0 0 ' + width + ' ' + height, role: 'img', 'aria-label': t('dag'), style: { width: '100%', minWidth: Math.min(256, width), height: 'auto', aspectRatio: width + '/' + height, display: 'block' } },
-                h('defs', null, h('marker', { id: 'sxw-dag-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, h('path', { d: 'M0 0L10 5L0 10Z', fill: 'var(--sxw-line)' }))),
-                nodes.slice(1).map((_, index) => {
-                  const a = point(index), b = point(index + 1), forward = a.row % 2 === 0
-                  const path = a.row === b.row ? 'M' + (a.x + (forward ? 204 : 0)) + ' ' + (a.y + 36) + 'H' + (b.x + (forward ? 0 : 204)) : 'M' + (a.x + 102) + ' ' + (a.y + 72) + 'V' + b.y
-                  return h('path', { key: index, d: path, fill: 'none', stroke: 'var(--sxw-line)', strokeWidth: 1.8, markerEnd: 'url(#sxw-dag-arrow)' })
-                }),
-                nodes.map((label, index) => { const p = point(index); return h('g', { key: index, transform: 'translate(' + p.x + ',' + p.y + ')' },
-                  h('rect', { width: 204, height: 72, rx: 10, fill: 'var(--dsw-alias-container-base, var(--dsw-specific-sidebar-fill))', stroke: 'var(--sxw-control-border)', strokeWidth: 1.25 }),
-                  h('text', { x: 14, y: 23, fontSize: 11, fill: 'var(--dsw-alias-label-secondary)' }, index === 0 || index === nodes.length - 1 ? t('graphBoundary') : t('graphStage') + ' ' + index),
-                  h('text', { x: 14, y: 47, fontSize: 12, fontWeight: 500, fill: 'currentColor' }, label.length > 26 ? label.slice(0, 25) + '…' : label), h('title', null, label)) }))),
-            h('p', { style: { ...note, marginBottom: 0 } }, t(stages.length ? 'graphStagesNote' : 'graphProgramNote')),
-            !!entry.dependencies?.length && h('p', { style: { ...note, marginBottom: 0 } }, t('graphDependencies') + ': ' + entry.dependencies.map(item => item.name + ' v' + item.version).join(' · ')))
+          const [graph,setGraph]=React.useState(null),[error,setError]=React.useState('')
+          React.useEffect(()=>{const controller=new AbortController();setGraph(null);setError('');api('graph?name='+encodeURIComponent(entry.name)+'&revisionId='+encodeURIComponent(entry.revisionId),{signal:controller.signal}).then(value=>{if(!controller.signal.aborted)setGraph(value)}).catch(error=>{if(!controller.signal.aborted)setError(error.message)});return ()=>controller.abort()},[entry.revisionId])
+          const nodes=graph?.nodes||[],edges=graph?.edges||[],levels=new Map(),positions=new Map()
+          const shortLabel=text=>{let width=0,result='';for(const c of text){width+=c.charCodeAt(0)>255?2:1;if(width>30)return result+'…';result+=c}return result}
+          let remaining=[...nodes]
+          for(let depth=0;remaining.length && depth<=nodes.length;depth++) {
+            const ready=remaining.filter(node=>edges.filter(edge=>edge.to===node.id).every(edge=>levels.has(edge.from)))
+            if(!ready.length)break
+            ready.forEach((node,index)=>{levels.set(node.id,depth);positions.set(node.id,{x:24+index*240,y:20+depth*108})})
+            remaining=remaining.filter(node=>!levels.has(node.id))
+          }
+          const width=Math.max(280,...[...positions.values()].map(p=>p.x+236)),height=Math.max(110,...[...positions.values()].map(p=>p.y+92))
+          return h('article',{style:{...card,marginBottom:20,gridColumn:'1 / -1',order:-1}},
+            h('h3',{style:{fontSize:15,margin:'0 0 12px'}},t('dag')),
+            error && h('p',{role:'alert'},error),
+            graph && h('p',{style:note},t('graphSyntaxNote')),
+            h('div',{style:{overflow:'auto',maxHeight:640,background:'var(--dsw-specific-sidebar-fill)',borderRadius:10}},
+              h('svg',{width,height,role:'img','aria-label':t('dag')},
+                h('defs',null,h('marker',{id:'sxw-dag-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto'},h('path',{d:'M0 0L10 5L0 10Z',fill:'var(--sxw-line)'}))),
+                edges.map((edge,index)=>{const a=positions.get(edge.from),b=positions.get(edge.to);return a&&b&&h('path',{key:index,d:`M${a.x+108} ${a.y+68}V${(a.y+b.y+68)/2}H${b.x+108}V${b.y}`,fill:'none',stroke:'var(--sxw-line)',strokeWidth:1.5,strokeDasharray:edge.relation==='contains'?'5 4':undefined,markerEnd:'url(#sxw-dag-arrow)'})}),
+                nodes.map(node=>{const p=positions.get(node.id);return p&&h('g',{key:node.id,transform:`translate(${p.x},${p.y})`},
+                  h('rect',{width:216,height:68,rx:8,fill:'var(--dsw-alias-container-base, var(--dsw-specific-sidebar-fill))',stroke:node.type==='opaque'?'#b80':'var(--sxw-control-border)'}),
+                  h('text',{x:10,y:22,fontSize:11,fill:'var(--dsw-alias-label-secondary)'},shortLabel(node.capability+' v'+node.version)),
+                  h('text',{x:10,y:46,fontSize:12,fill:'currentColor'},shortLabel(node.label)),h('title',null,node.label+'\n'+node.type+(node.line?' · line '+node.line:''))) }))),
+            !!graph?.limitations?.length && h('p',{style:note},graph.limitations.join('；')))
         }
         function EntryDetail({ entry, onBack, onDeleted, preparing }) {
+          const [repairSessions,setRepairSessions]=React.useState('')
+          const [repairFindings,setRepairFindings]=React.useState('')
+          const [preserveRepairContract,setPreserveRepairContract]=React.useState(true)
           const [input, setInput] = React.useState(() => initialValue(entry.execution?.inputSchema || { type: 'object' }) || {})
           const [jsonMode, setJsonMode] = React.useState(false)
           const [raw, setRaw] = React.useState('{}')
@@ -323,6 +315,12 @@ window.__ModuleLoader__.load({
             h(Button, { variant: 'ghost', size: 'sm', onClick: onBack, style: { paddingLeft: 0, marginBottom: 16 } }, '← ' + t('back')),
             h('header', { style: { marginBottom: 24 } },
               h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' } }, h('h2', { style: { fontSize: 22, margin: 0, overflowWrap: 'anywhere' } }, entry.name), h('span', { style: { ...note, background: 'var(--dsw-specific-sidebar-fill)', borderRadius: 6, padding: '2px 8px' } }, 'v' + entry.version), !entry.historical && h(DeleteEntry, { entry, onDeleted })),
+              !entry.historical && h('details',{style:{marginTop:12}},h('summary',null,'依据执行记录修订'),
+                h('p',null,'由提取 Agent 根据执行证据修订。默认保持公开接口；升级契约时需迁移调用方。不会在修订阶段重放业务。'),
+                h('label',null,'执行会话 ID',h('input',{'aria-label':'修订依据会话 ID',value:repairSessions,onInput:e=>setRepairSessions(e.currentTarget.value),style:{...control,width:'100%'}})),
+                h('label',null,'实跑发现',h('textarea',{'aria-label':'实跑发现',value:repairFindings,onInput:e=>setRepairFindings(e.currentTarget.value),style:{...control,width:'100%'},rows:3})),
+                h('label',null,h('input',{type:'checkbox',checked:preserveRepairContract,onChange:e=>setPreserveRepairContract(e.currentTarget.checked)}),' 保持现有输入/输出接口（取消后允许升级契约，调用方需要迁移）'),
+                h(Button,{disabled:!repairSessions.trim(),onClick:()=>runTask('optimize',{name:entry.name,sessionIds:repairSessions.trim().split(/[\s,]+/),preserveContract:preserveRepairContract,reviewFindings:repairFindings.trim()?[repairFindings.trim()]:[]})},'交给 Agent 修订')),
               h('p', { style: { ...note, fontSize: 14, marginBottom: 0 } }, displayDescription(entry.description)), entry.historical && h('p', {style:note}, t('snapshotMode'))),
             h('section', { style: { ...card, marginBottom: 20 } },
               h('h3', { style: { fontSize: 15, margin: '0 0 12px' } }, t('compatibility')),
@@ -654,6 +652,14 @@ window.__ModuleLoader__.load({
         }
         function Notice() {
           const state = React.useSyncExternalStore(subscribe, () => notice)
+          if (state?.kind === 'configure') return h('div',{style:{position:'fixed',right:24,bottom:24,zIndex:1000,padding:24,background:'var(--dsw-alias-background-primary,white)',border:'1px solid #aaa',borderRadius:12}},
+            h('form',{onSubmit:event=>{event.preventDefault();const values=new FormData(event.currentTarget);void runTask('extract',{sessionId:state.sessionId,...(values.get('resumeTaskId')?{resumeTaskId:values.get('resumeTaskId')}:{ }),intent:values.get('intent')?.trim()||undefined,requirements:{target:values.get('target')}})}},
+              h('h3',null,'提取用途与执行边界'),
+              h('label',null,'执行位置 ',h('select',{name:'target','aria-label':'执行位置'},h('option',{value:'local'},'当前宿主'),h('option',{value:'docker'},'Linux Docker 容器'))),
+              h('p',null,h('label',null,'复用目的（可选） ',h('textarea',{name:'intent','aria-label':'复用目的',placeholder:'准备在哪些任务中重复调用，需要哪些输入和结果？'}))),
+              h('details',null,h('summary',null,'恢复已保存的提取草稿'),h('label',null,'失败任务 ID ',h('input',{name:'resumeTaskId','aria-label':'失败任务 ID',placeholder:'留空则重新提取'}))),
+              h('p',null,'按真实职责与调用关系提取，DAG 自动生成。'),
+              h('button',{type:'submit'},'开始自主提取'),h('button',{type:'button',onClick:()=>update(null)},'取消')))
           if (!state) return null
           return h('aside', { role: state.kind === 'failed' ? 'alert' : 'status', 'aria-live': state.kind === 'failed' ? 'assertive' : 'polite', style: { position: 'fixed', right: 24, bottom: 24, width: 336, maxWidth: 'calc(100vw - 48px)', padding: 16, borderRadius: 'var(--dsw-radius-lg, 12px)', background: 'var(--dsw-specific-sidebar-fill)', color: 'var(--dsw-alias-label-primary)', border: '0.5px solid var(--dsw-alias-border-l2)', boxShadow: 'var(--dsw-shadow-lv2)', fontSize: 13, lineHeight: '20px', zIndex: 1100 } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
@@ -662,6 +668,7 @@ window.__ModuleLoader__.load({
               h(Button, { variant: 'ghost', size: 'sm', title: t('dismiss'), 'aria-label': t('dismiss'), onClick: () => update(null), style: { width: 28, padding: 0, color: 'var(--dsw-alias-label-tertiary)' }, icon: h(IconCloseOutlineRegular, { size: 16 }) })),
             state.detail && h('p', { style: { margin: '10px 0 0', color: 'var(--dsw-alias-label-secondary)', overflowWrap: 'anywhere' } }, state.detail),
             state.generatorSessionId && h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRightUpOutlineRegular, { size: 14 }), onClick: () => openRecordedSession({sessionId:state.generatorSessionId},message=>update({...state,detail:message})) }, t('conversation')),
+            state.kind === 'failed' && state.taskId && state.canResume && state.operation !== 'prepare' && h(Button, {variant:'ghost',size:'sm',onClick:()=>runTask(state.operation,{resumeTaskId:state.taskId,...(state.name?{name:state.name}:{})})},t('resumeExtraction')),
             state.kind === 'running' && state.taskId && h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void api('cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: state.taskId }) }).catch(error => update({ ...state, detail: error.message })) } }, t('cancel')),
             state.resultUrl && h('div', { style: { marginTop: 12, paddingTop: 10, borderTop: '0.5px solid var(--dsw-alias-border-l1)', display: 'flex', justifyContent: 'flex-end' } },
               h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRightUpOutlineRegular, { size: 14 }), onClick: () => window.open(state.resultUrl, '_blank', 'noopener,noreferrer') }, t('result'))))
